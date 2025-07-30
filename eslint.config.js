@@ -49,6 +49,8 @@ export default [
         afterEach: 'readonly',
         browser: 'readonly',
         chrome: 'readonly',
+        performance: 'readonly',
+        Date: 'readonly',
       },
     },
     plugins: {

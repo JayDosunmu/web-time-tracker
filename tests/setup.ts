@@ -4,15 +4,18 @@
 
 import chrome from 'sinon-chrome';
 
-// Set up global browser API mock
-(global as any).browser = chrome;
-(global as any).chrome = chrome;
-
-// Mock webextension-polyfill
-jest.mock('webextension-polyfill', () => chrome);
-
 // Set up common browser API defaults
 beforeEach(() => {
+  // Silence console logs
+  const consoleLogSpy = jest.spyOn(console, 'log')
+  consoleLogSpy.mockImplementation(() => { return })
+
+  const consoleWarnSpy = jest.spyOn(console, 'warn')
+  consoleWarnSpy.mockImplementation(() => { return })
+
+  const consoleErrorSpy = jest.spyOn(console, 'error')
+  consoleErrorSpy.mockImplementation(() => { return })
+
   // Reset all mocks before each test
   chrome.flush();
   
@@ -43,36 +46,6 @@ beforeEach(() => {
   chrome.storage.local.clear.callsFake(async () => {
     storage.clear();
   });
-  
-  // Set up tabs API
-  chrome.tabs.query.resolves([]);
-  chrome.tabs.get.resolves({
-    id: 1,
-    url: 'https://example.com',
-    active: true,
-    windowId: 1
-  });
-  chrome.tabs.sendMessage.resolves();
-  
-  // Set up runtime API
-  chrome.runtime.sendMessage.resolves();
-  // Event listeners don't need return value mocking
-  
-  // Set up windows API
-  chrome.windows.getCurrent.resolves({
-    id: 1,
-    focused: true,
-    type: 'normal'
-  });
-  
-  // Set up webNavigation API
-  // Event listeners don't need return value mocking
-  
-  // Mock performance.now for consistent timing
-  jest.spyOn(performance, 'now').mockReturnValue(1000);
-  
-  // Mock Date.now for consistent timestamps
-  jest.spyOn(Date, 'now').mockReturnValue(1640995200000); // 2022-01-01 00:00:00 UTC
 });
 
 afterEach(() => {
