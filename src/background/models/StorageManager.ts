@@ -2,8 +2,7 @@
  * Type-safe storage abstraction for browser.storage.local
  */
 
-import type { StorageSchema, DomainData, ExtensionSettings } from '../../../types/storage';
-import type { ActiveSession, } from '../../../types/session';
+import type { StorageSchema, DomainData, ExtensionSettings, ActiveSession } from '../../../types';
 
 type StorageArea = browser.storage.StorageArea;
 
