@@ -4,6 +4,10 @@
 
 import chrome from 'sinon-chrome';
 
+// Set up global browser API mock
+(global as any).browser = chrome;
+(global as any).chrome = chrome;
+
 // Set up common browser API defaults
 beforeEach(() => {
   // Silence console logs
@@ -46,6 +50,23 @@ beforeEach(() => {
   chrome.storage.local.clear.callsFake(async () => {
     storage.clear();
   });
+
+  // Set up browser API methods
+  chrome.tabs.get.resolves({
+    id: 1,
+    url: 'https://example.com',
+    active: true,
+    windowId: 1
+  });
+
+  // Set up browser constants
+  (chrome.windows as any).WINDOW_ID_NONE = -1;
+
+  // Set up browser event listeners as Jest mock functions
+  (chrome.tabs.onActivated as any).addListener = jest.fn();
+  (chrome.tabs.onUpdated as any).addListener = jest.fn();
+  (chrome.windows.onFocusChanged as any).addListener = jest.fn();
+  (chrome.webNavigation.onCompleted as any).addListener = jest.fn();
 });
 
 afterEach(() => {
