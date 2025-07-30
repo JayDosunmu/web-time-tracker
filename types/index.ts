@@ -2,88 +2,73 @@
  * Main type definitions export file
  */
 
-// Re-export all types from individual modules
-export * from './storage';
-export * from './session';
-export * from './messages';
-
-// Utility types
-export type Timestamp = number;
-export type Domain = string;
-export type TabId = number;
-export type WindowId = number;
-
-// Common interfaces
-export interface TimeRange {
-  start: number;
-  end: number;
+export interface ActiveSession {
+  domain: string;
+  startTime: number;
+  tabId: number;
+  windowId: number;
+  isPaused?: boolean;
 }
 
-export interface DateRange {
-  startDate: string; // ISO date string
-  endDate: string;   // ISO date string
+export interface Session {
+  startTime: number;
+  endTime?: number;
+  duration: number;
+  tabId: number;
+  windowId: number;
 }
 
-// Error types
-export class ExtensionError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public context?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = 'ExtensionError';
-  }
+export interface DomainData {
+  totalTime: number;
+  sessions: Session[];
+  dailyStats: Record<string, number>; // ISO date string -> milliseconds
+  lastAccessed: number; // Last time this domain was visited
 }
 
-export class StorageError extends ExtensionError {
-  constructor(message: string, context?: Record<string, unknown>) {
-    super(message, 'STORAGE_ERROR', context);
-    this.name = 'StorageError';
-  }
+export interface ExtensionSettings {
+  pillPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  pillVisibility: boolean;
+  dataRetentionDays: number; // How many days to keep detailed session data
+  excludedDomains: string[]; // Domains to ignore for tracking
 }
 
-export class SessionError extends ExtensionError {
-  constructor(message: string, context?: Record<string, unknown>) {
-    super(message, 'SESSION_ERROR', context);
-    this.name = 'SessionError';
-  }
+export interface StorageSchema {
+  domains: Record<string, DomainData>;
+  activeSession: ActiveSession | null;
+  settings: ExtensionSettings;
+  version: number; // For data migration
+  installDate: number; // When extension was first installed
 }
 
-// Utility type helpers
-export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
-export type RequireAtLeastOne<T, Keys extends keyof T = keyof T> = 
-  Pick<T, Exclude<keyof T, Keys>> & {
-    [K in Keys]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<Keys, K>>>;
-  }[Keys];
+export interface TimeAggregation {
+  today: number;
+  thisWeek: number;
+  thisMonth: number;
+  allTime: number;
+}
 
-// Configuration constants
-export const STORAGE_KEYS = {
-  DOMAINS: 'domains',
-  ACTIVE_SESSION: 'activeSession',
-  SETTINGS: 'settings',
-  VERSION: 'version',
-  INSTALL_DATE: 'installDate'
-} as const;
+export interface DomainStats extends TimeAggregation {
+  domain: string;
+  percentage: number; // Percentage of total time spent
+  averageSessionDuration: number;
+  sessionCount: number;
+}
 
-export const DEFAULT_SETTINGS = {
-  pillPosition: 'top-right' as const,
-  pillVisibility: true,
-  dataRetentionDays: 365,
-  excludedDomains: []
-};
+export interface PopupData {
+  totalTime: TimeAggregation;
+  domainStats: DomainStats[];
+  currentSession: {
+    domain: string;
+    currentTime: number;
+    isActive: boolean;
+  } | null;
+  lastUpdated: number;
+}
 
-export const CURRENT_STORAGE_VERSION = 1;
-
-// Time constants
-export const TIME_CONSTANTS = {
-  SECOND: 1000,
-  MINUTE: 60 * 1000,
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-  WEEK: 7 * 24 * 60 * 60 * 1000,
-  MONTH: 30 * 24 * 60 * 60 * 1000 // Approximate
-} as const;
-
-// Domain extraction utility type
-export type DomainExtractor = (url: string) => string | null;
+// Migration types for handling storage schema changes
+export interface MigrationData {
+  fromVersion: number;
+  toVersion: number;
+  migrationDate: number;
+  backupCreated: boolean;
+}
