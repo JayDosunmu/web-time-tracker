@@ -2,7 +2,8 @@
  * Shared test fixtures for domains, sessions, and storage data
  */
 
-import type { StorageSchema, DomainData, ActiveSession, ExtensionSettings, Session } from '../types/storage';
+import type { StorageSchema, DomainData, ExtensionSettings, Session } from '../types/storage';
+import type { ActiveSession, } from '../types/session';
 
 /**
  * Default extension settings for testing
