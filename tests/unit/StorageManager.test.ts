@@ -2,14 +2,16 @@
  * Comprehensive tests for StorageManager
  */
 
-import { StorageManager } from '../../src/background/models/StorageManager';
-import { testUtils } from '../utils';
+import browser from 'sinon-chrome';
 import { 
   mockStorageSchema, 
   mockDomainData, 
   mockActiveSession, 
   mockExtensionSettings
 } from '../fixtures';
+import { testUtils } from '../utils';
+
+import { StorageManager } from '../../src/background/models/StorageManager';
 
 describe('StorageManager', () => {
   let storageManager: StorageManager;
@@ -82,7 +84,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle storage errors gracefully', async () => {
-      // Replace the stateful mock with an error-throwing mock for this test
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.get as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -194,6 +196,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle domain data errors gracefully', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.get as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -241,6 +244,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle active session errors gracefully', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.get as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -299,6 +303,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle settings errors gracefully', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.get as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -316,6 +321,7 @@ describe('StorageManager', () => {
 
   describe('Error Handling', () => {
     it('should handle set operation errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.set as any).callsFake(async () => {
         throw new Error('Storage full');
       });
@@ -324,6 +330,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle remove operation errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.remove as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -332,6 +339,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle clear operation errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.clear as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -340,6 +348,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle updateDomainData errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.set as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -349,6 +358,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle setActiveSession errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.set as any).callsFake(async () => {
         throw new Error('Storage error');
       });
@@ -358,6 +368,7 @@ describe('StorageManager', () => {
     });
 
     it('should handle updateSettings errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.set as any).callsFake(async () => {
         throw new Error('Storage error');
       });
