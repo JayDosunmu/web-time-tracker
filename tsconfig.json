@@ -31,7 +31,7 @@
       "@types/*": ["types/*"]
     },
     "types": [
-      "webextension-polyfill",
+      "firefox-webext-browser",
       "jest",
       "@types/firefox-webext-browser"
     ]

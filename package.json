@@ -11,8 +11,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
+    "lint": "eslint {src,tests}/**/*.ts",
+    "lint:fix": "eslint {src,tests}/**/*.ts --fix",
     "clean": "rimraf build dist",
     "package": "web-ext build --source-dir dist",
     "dev": "concurrently \"npm run watch\" \"web-ext run --source-dir dist --reload\""
@@ -60,7 +60,7 @@
       "lcov",
       "html"
     ],
-    "moduleNameMapping": {
+    "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1",
       "^@types/(.*)$": "<rootDir>/types/$1"
     }
