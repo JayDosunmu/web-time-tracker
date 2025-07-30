@@ -170,3 +170,26 @@ The extension requires these Firefox permissions:
 - **Domain-Level Tracking**: URLs are not stored, only domain names
 - **User Control**: Configurable data retention and exclusion lists
 - **Minimal Permissions**: Only essential browser APIs are requested
+
+## Code Principles
+
+- If non-test implementation changes cause existing tests to fail, never change the tests— instead update the implementation to pass tests.
+
+## Testing Guidelines
+
+- To consider a test implementation complete, it must not contain commented out code (unless as an illustration to explain how the test currently works).
+- After writing tests, run them to ensure the expected outcome is observed (new tests are allowed to fail before feature implementation is complete).
+
+## Development Memories
+
+- New tests should not prevent the test system from running.
+- Never mark a failing test to be skipped. Either fix the implementation or take steps to ensure that the requirement/feature spec is correct.
+- Ensure all text files end in a newline.
+
+## Version Control Practices
+
+- Follow good version control practices:
+    - Make small commits
+    - Commit often
+    - Do not commit broken code or failing tests
+    - Follow a trunk-based development paradigm
