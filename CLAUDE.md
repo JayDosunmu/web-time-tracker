@@ -185,6 +185,8 @@ The extension requires these Firefox permissions:
 - New tests should not prevent the test system from running.
 - Never mark a failing test to be skipped. Either fix the implementation or take steps to ensure that the requirement/feature spec is correct.
 - Ensure all text files end in a newline.
+- Gradually iterate on implementation: start with a test validating the expected behavior, then implement just enough to pass the test.
+- Avoid writing functionality or code that isn't being used in the current development iteration.
 
 ## Version Control Practices
 
