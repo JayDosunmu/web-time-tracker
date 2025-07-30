@@ -2,10 +2,11 @@
  * Comprehensive tests for TimeTracker service
  */
 
-import { TimeTracker } from '../../src/background/services/TimeTracker';
-import type { StorageManager } from '../../src/background/models/StorageManager';
 import { testUtils } from '../utils';
+import { TimeTracker } from '../../src/background/services/TimeTracker';
 import { mockActiveSession, mockExtensionSettings } from '../fixtures';
+
+import type { StorageManager } from '../../src/background/models/StorageManager';
 
 describe('TimeTracker', () => {
   let timeTracker: TimeTracker;

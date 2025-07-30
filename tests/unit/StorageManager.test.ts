@@ -3,15 +3,15 @@
  */
 
 import browser from 'sinon-chrome';
+
 import { 
   mockStorageSchema, 
   mockDomainData, 
   mockActiveSession, 
   mockExtensionSettings
 } from '../fixtures';
-import { testUtils } from '../utils';
-
 import { StorageManager } from '../../src/background/models/StorageManager';
+import { testUtils } from '../utils';
 
 describe('StorageManager', () => {
   let storageManager: StorageManager;
@@ -21,7 +21,7 @@ describe('StorageManager', () => {
   beforeEach(() => {
     testUtils.resetAll();
     StorageManager.resetInstance();
-    storageManager = StorageManager.getInstance(browser.storage.local);
+    storageManager = StorageManager.getInstance(browser.storage.local as unknown as chrome.storage.StorageArea);
   });
 
   describe('Singleton Pattern', () => {

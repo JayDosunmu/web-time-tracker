@@ -17,10 +17,14 @@
     "package": "web-ext build --source-dir dist",
     "dev": "concurrently \"npm run watch\" \"web-ext run --source-dir dist --reload\""
   },
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  },
   "devDependencies": {
     "@types/firefox-webext-browser": "^120.0.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.1.0",
+    "@types/sinon-chrome": "^2.2.16",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "concurrently": "^9.2.0",
@@ -100,8 +104,5 @@
     "typescript"
   ],
   "author": "Taslim Dosunmu",
-  "license": "MIT",
-  "dependencies": {
-    "webextension-polyfill": "^0.12.0"
-  }
+  "license": "MIT"
 }
