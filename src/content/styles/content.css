@@ -1,0 +1,51 @@
+/**
+ * Content script styles for Web Time Tracker
+ * 
+ * Note: Most styles are contained within the TimeDisplayPill shadow DOM
+ * This file contains any global styles needed for content script functionality
+ */
+
+/* Ensure our extension doesn't interfere with page styles */
+#web-time-tracker-pill {
+  /* Reset any potential inherited styles */
+  all: initial;
+  
+  /* Ensure high z-index for visibility */
+  z-index: 2147483647 !important;
+  
+  /* Prevent interference with page layout */
+  position: fixed !important;
+  pointer-events: auto !important;
+  
+  /* Ensure proper font rendering */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif !important;
+}
+
+/* Accessibility improvements */
+#web-time-tracker-pill:focus-visible {
+  outline: 2px solid #4f46e5 !important;
+  outline-offset: 2px !important;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  #web-time-tracker-pill {
+    filter: contrast(1.2) !important;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  #web-time-tracker-pill * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print media - hide during printing */
+@media print {
+  #web-time-tracker-pill {
+    display: none !important;
+  }
+}
