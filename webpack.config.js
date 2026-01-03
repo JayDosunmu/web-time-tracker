@@ -9,8 +9,8 @@ module.exports = (env, argv) => {
   return {
     entry: {
       background: './src/background/background.ts',
-      content: './src/content/content.ts',
-      popup: './src/popup/popup.ts'
+      content: './src/content/content.ts'
+      // popup: './src/popup/popup.ts' // TODO: Implement in future phase
     },
     
     output: {
@@ -48,20 +48,12 @@ module.exports = (env, argv) => {
           {
             from: 'manifest.json',
             to: 'manifest.json'
-          },
-          {
-            from: 'src/popup/popup.html',
-            to: 'popup.html'
           }
+          // TODO: Add popup.html when popup is implemented
         ]
       }),
       
-      new HtmlWebpackPlugin({
-        template: 'src/popup/popup.html',
-        filename: 'popup.html',
-        chunks: ['popup'],
-        inject: true
-      }),
+      // TODO: Add HtmlWebpackPlugin for popup when implemented
       
       ...(isProduction ? [
         new MiniCssExtractPlugin({

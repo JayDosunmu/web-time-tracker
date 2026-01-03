@@ -72,3 +72,6 @@ export interface MigrationData {
   migrationDate: number;
   backupCreated: boolean;
 }
+
+// Re-export message types
+export * from './messages';
