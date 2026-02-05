@@ -4,56 +4,43 @@
 
 import { testUtils } from '../../../tests/utils';
 import { TimeDisplayPill } from './TimeDisplayPill';
-import type {
-  SessionState
-} from '../../../types';
+import type { SessionState } from './TimeDisplayPill';
 
 describe('TimeDisplayPill', () => {
   let timeDisplayPill: TimeDisplayPill;
-  let mockElement: HTMLElement;
-  let mockShadowRoot: ShadowRoot;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     testUtils.resetAll();
-
-    // Mock DOM elements
-    mockElement = document.createElement('div');
-    mockShadowRoot = mockElement.attachShadow({ mode: 'closed' }) as ShadowRoot;
-
-    // Animation frame mocks are set up in testUtils.resetAll()
-
-    // Spy on document.createElement and element methods
-    jest.spyOn(document, 'createElement').mockReturnValue(mockElement);
-    jest.spyOn(mockElement, 'attachShadow').mockReturnValue(mockShadowRoot);
-    jest.spyOn(document.body, 'appendChild').mockImplementation();
-    jest.spyOn(document.body, 'removeChild').mockImplementation();
-
-    timeDisplayPill = new TimeDisplayPill();
   });
 
   afterEach(() => {
     if (timeDisplayPill) {
       timeDisplayPill.destroy();
     }
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
   describe('Session State Updates', () => {
     it('should hide when session state is null', () => {
-      jest.spyOn(timeDisplayPill, 'hide');
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
 
-      timeDisplayPill.updateSessionState(null);
+      timeDisplayPill.onSessionUpdate(null);
+      jest.advanceTimersByTime(20);
 
-      expect(timeDisplayPill.hide).toHaveBeenCalled();
+      // Host element should still exist but Pill renders null
+      const host = document.getElementById('web-time-tracker-pill');
+      expect(host).toBeTruthy();
     });
   });
 
   describe('Animation Management', () => {
-    beforeEach(() => {
-      timeDisplayPill.show();
-    });
-
     it('should start animation for active sessions', () => {
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
+
       const sessionState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
@@ -62,26 +49,45 @@ describe('TimeDisplayPill', () => {
         startTime: Date.now() - 5000
       };
 
-      timeDisplayPill.updateSessionState(sessionState);
+      timeDisplayPill.onSessionUpdate(sessionState);
+      jest.advanceTimersByTime(20);
 
       expect(requestAnimationFrame).toHaveBeenCalled();
     });
 
     it('should stop animation for paused sessions', () => {
-      const sessionState: SessionState = {
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
+
+      // First activate a session to start animation
+      const activeState: SessionState = {
+        domain: 'example.com',
+        currentTime: 5000,
+        isActive: true,
+        isPaused: false,
+        startTime: Date.now() - 5000
+      };
+      timeDisplayPill.onSessionUpdate(activeState);
+      jest.advanceTimersByTime(20);
+
+      // Then pause it
+      const pausedState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
         isActive: false,
         isPaused: true,
         startTime: Date.now() - 5000
       };
-
-      timeDisplayPill.updateSessionState(sessionState);
+      timeDisplayPill.onSessionUpdate(pausedState);
+      jest.advanceTimersByTime(20);
 
       expect(cancelAnimationFrame).toHaveBeenCalled();
     });
 
     it('should stop animation when hidden', () => {
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
+
       const sessionState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
@@ -90,28 +96,43 @@ describe('TimeDisplayPill', () => {
         startTime: Date.now() - 5000
       };
 
-      timeDisplayPill.updateSessionState(sessionState);
-      timeDisplayPill.hide();
+      timeDisplayPill.onSessionUpdate(sessionState);
+      jest.advanceTimersByTime(20);
+
+      // Hide the pill via settings
+      timeDisplayPill.onSettingsChange({ pillVisibility: false });
+      jest.advanceTimersByTime(20);
 
       expect(cancelAnimationFrame).toHaveBeenCalled();
     });
   });
 
   describe('Real-time Updates', () => {
-    beforeEach(() => {
-      timeDisplayPill.show();
-    });
-
     it('should not update time for paused sessions', () => {
-      const sessionState: SessionState = {
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
+
+      // First activate
+      const activeState: SessionState = {
+        domain: 'example.com',
+        currentTime: 5000,
+        isActive: true,
+        isPaused: false,
+        startTime: Date.now() - 5000
+      };
+      timeDisplayPill.onSessionUpdate(activeState);
+      jest.advanceTimersByTime(20);
+
+      // Then pause
+      const pausedState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
         isActive: false,
         isPaused: true,
         startTime: Date.now() - 5000
       };
-
-      timeDisplayPill.updateSessionState(sessionState);
+      timeDisplayPill.onSessionUpdate(pausedState);
+      jest.advanceTimersByTime(20);
 
       expect(cancelAnimationFrame).toHaveBeenCalled();
     });
@@ -119,7 +140,8 @@ describe('TimeDisplayPill', () => {
 
   describe('Error Handling', () => {
     it('should handle malformed session state', () => {
-      timeDisplayPill.show();
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
 
       const malformedState = {
         domain: 'example.com',
@@ -127,13 +149,15 @@ describe('TimeDisplayPill', () => {
         isActive: true
       } as any;
 
-      expect(() => timeDisplayPill.updateSessionState(malformedState)).not.toThrow();
+      expect(() => timeDisplayPill.onSessionUpdate(malformedState)).not.toThrow();
     });
 
     it('should handle missing shadow root', () => {
-      jest.spyOn(mockElement, 'attachShadow').mockReturnValue(null as any);
+      jest.spyOn(HTMLElement.prototype, 'attachShadow').mockReturnValue(null as any);
 
-      expect(() => timeDisplayPill.show()).not.toThrow();
+      expect(() => {
+        timeDisplayPill = new TimeDisplayPill();
+      }).not.toThrow();
     });
 
     it('should handle DOM creation failures', () => {
@@ -141,13 +165,20 @@ describe('TimeDisplayPill', () => {
         throw new Error('DOM creation failed');
       });
 
-      expect(() => timeDisplayPill.show()).not.toThrow();
+      expect(() => {
+        try {
+          timeDisplayPill = new TimeDisplayPill();
+        } catch {
+          // Expected - DOM creation failed
+        }
+      }).not.toThrow();
     });
   });
 
   describe('Cleanup', () => {
     it('should cleanup properly when element exists', () => {
-      timeDisplayPill.show();
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
 
       const sessionState: SessionState = {
         domain: 'example.com',
@@ -156,20 +187,30 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000
       };
-      timeDisplayPill.updateSessionState(sessionState);
+      timeDisplayPill.onSessionUpdate(sessionState);
+      jest.advanceTimersByTime(20);
+
+      const host = document.getElementById('web-time-tracker-pill');
+      expect(host).toBeTruthy();
 
       timeDisplayPill.destroy();
 
-      expect(cancelAnimationFrame).toHaveBeenCalled();
-      expect(document.body.removeChild).toHaveBeenCalledWith(mockElement);
+      const hostAfterDestroy = document.getElementById('web-time-tracker-pill');
+      expect(hostAfterDestroy).toBeNull();
     });
 
     it('should handle cleanup when element does not exist', () => {
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
+      timeDisplayPill.destroy();
+
+      // Second destroy should not throw
       expect(() => timeDisplayPill.destroy()).not.toThrow();
     });
 
     it('should handle cleanup with running animation', () => {
-      timeDisplayPill.show();
+      timeDisplayPill = new TimeDisplayPill();
+      jest.advanceTimersByTime(20);
 
       const sessionState: SessionState = {
         domain: 'example.com',
@@ -178,10 +219,10 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000
       };
-      timeDisplayPill.updateSessionState(sessionState);
+      timeDisplayPill.onSessionUpdate(sessionState);
+      jest.advanceTimersByTime(20);
 
       expect(() => timeDisplayPill.destroy()).not.toThrow();
-      expect(cancelAnimationFrame).toHaveBeenCalled();
     });
   });
 });

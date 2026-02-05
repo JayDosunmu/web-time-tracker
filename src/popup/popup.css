@@ -1,0 +1,10 @@
+body {
+  width: 350px;
+  min-height: 400px;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.popup-container {
+  padding: 16px;
+}

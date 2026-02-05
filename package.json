@@ -4,46 +4,43 @@
   "description": "Firefox extension to track time spent on different domains",
   "main": "dist/background.js",
   "scripts": {
-    "build:dev": "webpack --mode development",
-    "build:prod": "webpack --mode production",
-    "watch": "webpack --mode development --watch",
+    "build:dev": "vite build",
+    "build:prod": "NODE_ENV=production vite build",
+    "dev": "vite build --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
-    "lint": "eslint {src,tests}/**/*.ts",
-    "lint:fix": "eslint {src,tests}/**/*.ts --fix",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"types/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" \"types/**/*.ts\" --fix",
     "clean": "rimraf build dist",
-    "package": "web-ext build --source-dir dist",
-    "dev": "concurrently \"npm run watch\" \"web-ext run --source-dir dist --reload\""
+    "package": "npm run build:prod && web-ext build --source-dir dist"
   },
   "dependencies": {
+    "preact": "^10.28.3",
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
+    "@preact/preset-vite": "^2.10.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/preact": "^3.2.4",
     "@types/firefox-webext-browser": "^120.0.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.1.0",
     "@types/sinon-chrome": "^2.2.16",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
-    "concurrently": "^9.2.0",
-    "copy-webpack-plugin": "^13.0.0",
-    "css-loader": "^7.1.2",
     "eslint": "^9.32.0",
-    "html-webpack-plugin": "^5.6.3",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
-    "mini-css-extract-plugin": "^2.9.2",
     "rimraf": "^6.0.1",
     "sinon": "^21.0.0",
     "sinon-chrome": "^3.0.1",
     "ts-jest": "^29.4.0",
-    "ts-loader": "^9.5.2",
     "typescript": "^5.8.3",
-    "web-ext": "^8.9.0",
-    "webpack": "^5.101.0",
-    "webpack-cli": "^6.0.1"
+    "vite": "^7.3.1",
+    "vite-plugin-web-extension": "^4.5.0",
+    "web-ext": "^8.9.0"
   },
   "jest": {
     "preset": "ts-jest",
@@ -52,13 +49,20 @@
       "<rootDir>/tests/setup.ts"
     ],
     "testMatch": [
-      "<rootDir>/src/**/*.test.ts"
+      "<rootDir>/src/**/*.test.{ts,tsx}"
+    ],
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "json"
     ],
     "collectCoverageFrom": [
-      "src/**/*.ts",
+      "src/**/*.{ts,tsx}",
       "!src/**/*.d.ts",
       "!src/**/index.ts",
-      "!src/**/*.test.ts"
+      "!src/**/*.test.{ts,tsx}"
     ],
     "coverageReporters": [
       "text",
@@ -67,7 +71,25 @@
     ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1",
-      "^@types/(.*)$": "<rootDir>/types/$1"
+      "^@types/(.*)$": "<rootDir>/types/$1",
+      "^preact$": "<rootDir>/node_modules/preact/dist/preact.js",
+      "^preact/hooks$": "<rootDir>/node_modules/preact/hooks/dist/hooks.js",
+      "^preact/jsx-runtime$": "<rootDir>/node_modules/preact/jsx-runtime/dist/jsxRuntime.js",
+      "^preact/compat$": "<rootDir>/node_modules/preact/compat/dist/compat.js",
+      "^preact/test-utils$": "<rootDir>/node_modules/preact/test-utils/dist/testUtils.js",
+      "^react$": "<rootDir>/node_modules/preact/compat/dist/compat.js",
+      "^react-dom$": "<rootDir>/node_modules/preact/compat/dist/compat.js",
+      "^react-dom/test-utils$": "<rootDir>/node_modules/preact/test-utils/dist/testUtils.js",
+      "^react/jsx-runtime$": "<rootDir>/node_modules/preact/jsx-runtime/dist/jsxRuntime.js",
+      "\\.css\\?inline$": "<rootDir>/tests/css-inline-mock.js"
+    },
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.json"
+        }
+      ]
     }
   },
   "eslintConfig": {

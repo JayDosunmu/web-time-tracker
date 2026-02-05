@@ -2,7 +2,7 @@
  * Content script entry point for Web Time Tracker extension
  */
 
-import { ContentScriptManager } from './ContentScriptManager';
+import { ContentScriptManager } from "./ContentScriptManager";
 
 // Global manager instance
 let contentManager: ContentScriptManager | null = null;
@@ -17,7 +17,7 @@ async function initializeContentScript(): Promise<void> {
       return;
     }
 
-    console.log('Initializing Web Time Tracker content script...');
+    console.log("Initializing Web Time Tracker content script...");
 
     // Get manager instance
     contentManager = ContentScriptManager.getInstance();
@@ -31,9 +31,9 @@ async function initializeContentScript(): Promise<void> {
     // Set up page visibility change detection
     setupVisibilityChangeDetection();
 
-    console.log('Web Time Tracker content script initialized successfully');
+    console.log("Web Time Tracker content script initialized successfully");
   } catch (error) {
-    console.error('Content script initialization failed:', error);
+    console.error("Content script initialization failed:", error);
   }
 }
 
@@ -42,19 +42,24 @@ async function initializeContentScript(): Promise<void> {
  */
 function shouldInitialize(): boolean {
   // Skip on chrome:// and moz-extension:// pages
-  if (window.location.protocol === 'chrome:' || 
-      window.location.protocol === 'moz-extension:' ||
-      window.location.protocol === 'chrome-extension:') {
+  if (
+    window.location.protocol === "chrome:" ||
+    window.location.protocol === "moz-extension:" ||
+    window.location.protocol === "chrome-extension:"
+  ) {
     return false;
   }
 
   // Skip on local file URLs
-  if (window.location.protocol === 'file:') {
+  if (window.location.protocol === "file:") {
     return false;
   }
 
   // Only initialize on http/https pages
-  return window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  return (
+    window.location.protocol === "http:" ||
+    window.location.protocol === "https:"
+  );
 }
 
 /**
@@ -69,21 +74,21 @@ function setupUrlChangeDetection(): void {
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
 
-  history.pushState = function(...args) {
+  history.pushState = function (...args): void {
     originalPushState.apply(history, args);
     handleUrlChange();
   };
 
-  history.replaceState = function(...args) {
+  history.replaceState = function (...args): void {
     originalReplaceState.apply(history, args);
     handleUrlChange();
   };
 
   // Listen for popstate events (back/forward navigation)
-  window.addEventListener('popstate', handleUrlChange);
+  window.addEventListener("popstate", handleUrlChange);
 
   // Listen for hashchange events
-  window.addEventListener('hashchange', handleUrlChange);
+  window.addEventListener("hashchange", handleUrlChange);
 
   function handleUrlChange(): void {
     const newUrl = window.location.href;
@@ -103,7 +108,7 @@ function setupUrlChangeDetection(): void {
 function setupVisibilityChangeDetection(): void {
   if (!contentManager) return;
 
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener("visibilitychange", () => {
     if (contentManager) {
       // Note: Page visibility changes are handled by the background service
       // through window focus events, but we could add additional logic here
@@ -122,23 +127,23 @@ function cleanup(): void {
       contentManager.destroy();
       contentManager = null;
     } catch (error) {
-      console.error('Content script cleanup error:', error);
+      console.error("Content script cleanup error:", error);
     }
   }
 }
 
 // Initialize when script loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeContentScript);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeContentScript);
 } else {
   initializeContentScript();
 }
 
 // Cleanup on page unload
-window.addEventListener('beforeunload', cleanup);
+window.addEventListener("beforeunload", cleanup);
 
 // Also cleanup if the script is somehow reloaded
-window.addEventListener('unload', cleanup);
+window.addEventListener("unload", cleanup);
 
 // Export for testing (browser environment)
 (window as any).WebTimeTrackerContentScript = {
@@ -146,5 +151,5 @@ window.addEventListener('unload', cleanup);
   shouldInitialize,
   setupUrlChangeDetection,
   setupVisibilityChangeDetection,
-  cleanup
+  cleanup,
 };
