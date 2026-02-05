@@ -2,11 +2,11 @@
  * Comprehensive tests for TimeTracker service
  */
 
-import { testUtils } from '../utils';
-import { TimeTracker } from '../../src/background/services/TimeTracker';
-import { mockActiveSession, mockExtensionSettings } from '../fixtures';
+import { testUtils } from '../../../tests/utils';
+import { TimeTracker } from './TimeTracker';
+import { mockActiveSession, mockExtensionSettings } from '../../../tests/fixtures';
 
-import type { StorageManager } from '../../src/background/models/StorageManager';
+import type { StorageManager } from '../models/StorageManager';
 
 describe('TimeTracker', () => {
   let timeTracker: TimeTracker;
@@ -14,7 +14,7 @@ describe('TimeTracker', () => {
 
   beforeEach(() => {
     testUtils.resetAll();
-    
+
     // Create mock StorageManager with required methods for TimeTracker
     mockStorageManager = {
       getActiveSession: jest.fn(),
@@ -249,7 +249,7 @@ describe('TimeTracker', () => {
     it('should update domain data when stopping session', async () => {
       const activeSession = { ...mockActiveSession, startTime: 1000 };
       mockStorageManager.getActiveSession.mockResolvedValue(activeSession);
-      
+
       const existingDomainData = {
         totalTime: 5000,
         sessions: [],
@@ -372,7 +372,7 @@ describe('TimeTracker', () => {
       // Test case where system clock moves backwards
       const startTime = 5000;
       const endTime = 3000; // Clock moved backwards
-      
+
       const duration = timeTracker.calculateDuration(startTime, endTime);
       expect(duration).toBe(0); // Should not return negative duration
     });

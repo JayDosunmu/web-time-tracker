@@ -2,19 +2,19 @@
  * Tests for ContentScriptManager content script orchestration
  */
 
-import { testUtils } from '../utils';
-import { ContentScriptManager } from '../../src/content/ContentScriptManager';
-import { MessageRouter } from '../../src/content/messaging/MessageRouter';
-import { TimeDisplayPill } from '../../src/content/components/TimeDisplayPill';
-import type { 
+import { testUtils } from '../../tests/utils';
+import { ContentScriptManager } from './ContentScriptManager';
+import { MessageRouter } from './messaging/MessageRouter';
+import { TimeDisplayPill } from './components/TimeDisplayPill';
+import type {
   SessionUpdateMessage,
   SettingsChangeMessage,
-  MessageResponse 
+  MessageResponse
 } from '../../types';
 
 // Mock dependencies
-jest.mock('../../src/content/messaging/MessageRouter');
-jest.mock('../../src/content/components/TimeDisplayPill');
+jest.mock('./messaging/MessageRouter');
+jest.mock('./components/TimeDisplayPill');
 
 describe('ContentScriptManager', () => {
   let contentManager: ContentScriptManager;
@@ -23,14 +23,14 @@ describe('ContentScriptManager', () => {
 
   beforeEach(() => {
     testUtils.resetAll();
-    
+
     // Mock window.location hostname
     delete (window as any).location;
     (window as any).location = {
       href: 'https://example.com/page',
       hostname: 'example.com'
     };
-    
+
     // Create mock instances
     mockMessageRouter = {
       initialize: jest.fn(),
@@ -41,7 +41,7 @@ describe('ContentScriptManager', () => {
       reportError: jest.fn(),
       destroy: jest.fn()
     } as any;
-    
+
     mockTimeDisplayPill = {
       onSessionUpdate: jest.fn(),
       onSettingsChange: jest.fn(),
@@ -69,7 +69,7 @@ describe('ContentScriptManager', () => {
     it('should return the same instance', () => {
       const instance1 = ContentScriptManager.getInstance();
       const instance2 = ContentScriptManager.getInstance();
-      
+
       expect(instance1).toBe(instance2);
     });
 
@@ -77,7 +77,7 @@ describe('ContentScriptManager', () => {
       const instance1 = ContentScriptManager.getInstance();
       ContentScriptManager.resetInstance();
       const instance2 = ContentScriptManager.getInstance();
-      
+
       expect(instance1).not.toBe(instance2);
     });
   });
@@ -129,7 +129,7 @@ describe('ContentScriptManager', () => {
       mockMessageRouter.requestSessionState.mockResolvedValue({ success: true });
 
       const initPromise = contentManager.initialize();
-      
+
       // Simulate DOMContentLoaded
       setTimeout(() => {
         document.dispatchEvent(new Event('DOMContentLoaded'));
@@ -187,7 +187,7 @@ describe('ContentScriptManager', () => {
 
     it('should register and unregister components', () => {
       const mockComponent = { destroy: jest.fn() };
-      
+
       contentManager.registerComponent('testComponent', mockComponent);
       expect(contentManager.getComponent('testComponent')).toBe(mockComponent);
 
@@ -198,7 +198,7 @@ describe('ContentScriptManager', () => {
 
     it('should handle components without destroy method', () => {
       const mockComponent = {};
-      
+
       contentManager.registerComponent('testComponent', mockComponent);
       expect(() => contentManager.unregisterComponent('testComponent')).not.toThrow();
     });
@@ -366,7 +366,7 @@ describe('ContentScriptManager', () => {
       // Trigger a broadcast
       const registerCalls = mockMessageRouter.registerHandler.mock.calls;
       const sessionUpdateHandler = registerCalls.find(call => call[0] === 'SESSION_UPDATE')?.[1];
-      
+
       const sessionMessage: SessionUpdateMessage = {
         type: 'SESSION_UPDATE',
         payload: {

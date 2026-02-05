@@ -4,18 +4,18 @@
 
 import browser from 'sinon-chrome';
 
-import { BackgroundService } from '../../src/background/background';
-import { testUtils } from '../utils';
-import { mockActiveSession, mockExtensionSettings } from '../fixtures';
+import { BackgroundService } from './background';
+import { testUtils } from '../../tests/utils';
+import { mockActiveSession, mockExtensionSettings } from '../../tests/fixtures';
 
-import type { StorageManager } from '../../src/background/models/StorageManager';
-import type { TimeTracker } from '../../src/background/services/TimeTracker';
+import type { StorageManager } from './models/StorageManager';
+import type { TimeTracker } from './services/TimeTracker';
 
 describe('BackgroundService', () => {
   let backgroundService: BackgroundService;
   let mockStorageManager: jest.Mocked<StorageManager>;
   let mockTimeTracker: jest.Mocked<TimeTracker>;
-  
+
   // Event handler capture variables
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let tabActivatedHandler: any;
@@ -28,7 +28,7 @@ describe('BackgroundService', () => {
 
   beforeEach(() => {
     testUtils.resetAll();
-    
+
     // Create mock StorageManager
     mockStorageManager = {
       getActiveSession: jest.fn(),
@@ -106,10 +106,10 @@ describe('BackgroundService', () => {
       // Verify tab event listeners are registered using Jest assertions
       expect(browser.tabs.onActivated.addListener).toHaveBeenCalled();
       expect(browser.tabs.onUpdated.addListener).toHaveBeenCalled();
-      
+
       // Verify window event listener is registered
       expect(browser.windows.onFocusChanged.addListener).toHaveBeenCalled();
-      
+
       // Verify webNavigation event listener is registered
       expect(browser.webNavigation.onCompleted.addListener).toHaveBeenCalled();
     });
@@ -138,7 +138,7 @@ describe('BackgroundService', () => {
     it('should start tracking when tab becomes active', async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
       const tabInfo = { id: 123, url: 'https://example.com/path', windowId: 1 };
-      
+
       // Mock browser.tabs.get to return tab info
       browser.tabs.get.resolves(tabInfo);
       mockTimeTracker.startSession.mockResolvedValue(mockActiveSession);
@@ -155,7 +155,7 @@ describe('BackgroundService', () => {
     it('should stop current session before starting new one', async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
       const tabInfo = { id: 123, url: 'https://example.com', windowId: 1 };
-      
+
       browser.tabs.get.resolves(tabInfo);
       mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
       mockTimeTracker.stopSession.mockResolvedValue({
@@ -174,7 +174,7 @@ describe('BackgroundService', () => {
 
     it('should handle tab activation errors gracefully', async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
-      
+
       browser.tabs.get.rejects(new Error('Tab not found'));
 
       // Should not throw error
@@ -186,7 +186,7 @@ describe('BackgroundService', () => {
       const tabId = 123;
       const changeInfo = { url: 'https://newsite.com' };
       const tab = { id: tabId, url: 'https://newsite.com', windowId: 1, active: true };
-      
+
       browser.tabs.get.resolves(tab);
       mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
       mockTimeTracker.extractDomain.mockReturnValue('newsite.com');
@@ -208,7 +208,7 @@ describe('BackgroundService', () => {
       const tabId = 123;
       const changeInfo = { url: 'https://newsite.com' };
       const tab = { id: tabId, url: 'https://newsite.com', windowId: 1, active: false };
-      
+
       browser.tabs.get.resolves(tab);
 
       await tabUpdatedHandler(tabId, changeInfo, tab);
@@ -286,7 +286,7 @@ describe('BackgroundService', () => {
         frameId: 0, // Main frame
         url: 'https://example.com/page'
       };
-      
+
       const tab = { id: 123, url: 'https://example.com/page', windowId: 1, active: true };
       browser.tabs.get.resolves(tab);
       mockTimeTracker.extractDomain.mockReturnValue('example.com');
@@ -316,7 +316,7 @@ describe('BackgroundService', () => {
         frameId: 0,
         url: 'https://excluded.com'
       };
-      
+
       const settingsWithExclusion = {
         ...mockExtensionSettings,
         excludedDomains: ['excluded.com']
@@ -333,17 +333,17 @@ describe('BackgroundService', () => {
   describe('Service State Management', () => {
     it('should track initialization state', async () => {
       expect(backgroundService.isInitialized()).toBe(false);
-      
+
       await backgroundService.initialize();
-      
+
       expect(backgroundService.isInitialized()).toBe(true);
     });
 
     it('should provide current session status', async () => {
       mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
-      
+
       const session = await backgroundService.getCurrentSession();
-      
+
       expect(session).toEqual(mockActiveSession);
       expect(mockStorageManager.getActiveSession).toHaveBeenCalled();
     });
@@ -383,7 +383,7 @@ describe('BackgroundService', () => {
 
       // Should not throw error
       await expect(tabActivatedHandler(activeInfo)).resolves.toBeUndefined();
-      
+
       // Service should remain operational
       expect(backgroundService.isInitialized()).toBe(true);
     });
@@ -391,14 +391,14 @@ describe('BackgroundService', () => {
     it('should handle browser API failures gracefully', async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
       browser.tabs.get.rejects(new Error('Browser API error'));
-      
+
       await expect(tabActivatedHandler(activeInfo)).resolves.toBeUndefined();
     });
 
     it('should validate tab information before processing', async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
       const invalidTab = { id: 123, url: undefined, windowId: 1 };
-      
+
       browser.tabs.get.resolves(invalidTab);
 
       await tabActivatedHandler(activeInfo);
