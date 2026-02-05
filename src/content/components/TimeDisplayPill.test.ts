@@ -2,12 +2,12 @@
  * Tests for TimeDisplayPill component
  */
 
-import { testUtils } from '../utils';
-import { TimeDisplayPill } from '../../src/content/components/TimeDisplayPill';
-import type { 
+import { testUtils } from '../../../tests/utils';
+import { TimeDisplayPill } from './TimeDisplayPill';
+import type {
   SessionState,
   SettingsState
-} from '../../types';
+} from '../../../types';
 
 describe('TimeDisplayPill', () => {
   let timeDisplayPill: TimeDisplayPill;

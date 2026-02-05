@@ -52,12 +52,13 @@
       "<rootDir>/tests/setup.ts"
     ],
     "testMatch": [
-      "<rootDir>/tests/**/*.test.ts"
+      "<rootDir>/src/**/*.test.ts"
     ],
     "collectCoverageFrom": [
       "src/**/*.ts",
       "!src/**/*.d.ts",
-      "!src/**/index.ts"
+      "!src/**/index.ts",
+      "!src/**/*.test.ts"
     ],
     "coverageReporters": [
       "text",

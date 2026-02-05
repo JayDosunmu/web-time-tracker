@@ -2,12 +2,12 @@
  * Tests for MessageRouter content script messaging
  */
 
-import { testUtils } from '../utils';
-import { MessageRouter } from '../../src/content/messaging/MessageRouter';
-import type { 
+import { testUtils } from '../../../tests/utils';
+import { MessageRouter } from './MessageRouter';
+import type {
   SessionUpdateMessage,
-  MessageResponse 
-} from '../../types';
+  MessageResponse
+} from '../../../types';
 
 describe('MessageRouter', () => {
   let messageRouter: MessageRouter;
@@ -15,10 +15,10 @@ describe('MessageRouter', () => {
 
   beforeEach(() => {
     testUtils.resetAll();
-    
+
     // Get the mocked sendMessage function
     mockSendMessage = testUtils.browserRuntime.sendMessage;
-    
+
     // Create message router instance
     messageRouter = new MessageRouter();
   });
@@ -33,7 +33,7 @@ describe('MessageRouter', () => {
   describe('Initialization', () => {
     it('should initialize successfully', () => {
       messageRouter.initialize();
-      
+
       // Verify message listener was registered
       expect(browser.runtime.onMessage.addListener).toHaveBeenCalled();
     });
@@ -41,7 +41,7 @@ describe('MessageRouter', () => {
     it('should not reinitialize if already initialized', () => {
       messageRouter.initialize();
       messageRouter.initialize();
-      
+
       // Should only register listener once
       expect(browser.runtime.onMessage.addListener).toHaveBeenCalledTimes(1);
     });
@@ -106,8 +106,8 @@ describe('MessageRouter', () => {
     });
 
     it('should request session state correctly', async () => {
-      const mockResponse: MessageResponse = { 
-        success: true, 
+      const mockResponse: MessageResponse = {
+        success: true,
         data: { domain: 'example.com', currentTime: 5000, isActive: true }
       };
       mockSendMessage.mockResolvedValue(mockResponse);
@@ -336,7 +336,7 @@ describe('MessageRouter', () => {
   describe('Cleanup', () => {
     it('should cleanup properly', () => {
       messageRouter.initialize();
-      
+
       expect(() => messageRouter.destroy()).not.toThrow();
     });
 
