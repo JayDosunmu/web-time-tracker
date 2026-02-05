@@ -52,30 +52,34 @@ A Firefox extension that tracks time spent on different websites. It displays a 
 ```
 src/
 ├── background/
-│   ├── background.ts            # Entry point, BackgroundService class
+│   ├── background.ts              # Entry point, BackgroundService class
 │   ├── services/
-│   │   └── TimeTracker.ts       # Core time tracking logic
+│   │   └── TimeTracker.ts         # Core time tracking logic
 │   └── models/
-│       └── StorageManager.ts    # Type-safe storage abstraction
+│       └── StorageManager.ts      # Type-safe storage abstraction
 ├── content/
-│   ├── content.ts               # Entry point
-│   ├── ContentScriptManager.ts  # Lifecycle and component coordination
+│   ├── content.ts                 # Entry point
+│   ├── ContentScriptManager.ts    # Lifecycle and component coordination
 │   ├── components/
-│   │   └── TimeDisplayPill.ts   # Floating timer UI
+│   │   ├── TimeDisplayPill.tsx    # Floating timer (Preact + Shadow DOM)
+│   │   └── TimeDisplayPill.styles.css
 │   ├── messaging/
-│   │   └── MessageRouter.ts     # Typed message passing
+│   │   └── MessageRouter.ts       # Typed message passing
 │   └── styles/
-│       └── content.css          # Pill styling
-├── popup/                       # Browser-action popup interface
-└── types/                       # Shared TypeScript definitions
-    ├── index.ts                 # Storage schema, session types
-    └── messages.ts              # Message union types
+│       └── content.css            # Host element styles
+├── popup/
+│   ├── popup.html                 # Popup entry point
+│   ├── popup.tsx                  # Preact mount
+│   ├── popup.css                  # Popup styles
+│   └── App.tsx                    # Popup root component
+types/
+├── index.ts                       # Storage schema, session types
+└── messages.ts                    # Message union types
 
 tests/
-├── setup.ts                     # Test environment bootstrap
-├── fixtures.ts                  # Shared mock data
-├── utils.ts                     # Browser API mocking utilities
-└── unit/                        # Unit tests per component
+├── setup.ts                       # Test environment bootstrap
+├── fixtures.ts                    # Shared mock data
+└── utils.ts                       # Browser API mocking utilities
 ```
 
 ## Prerequisites
@@ -102,7 +106,7 @@ npm install
 npm run dev
 ```
 
-This starts Webpack in watch mode and launches Firefox with the extension loaded via `web-ext`. Code changes trigger an automatic rebuild and extension reload.
+This starts Vite in watch mode and launches Firefox with the extension loaded via `web-ext`. Code changes trigger an automatic rebuild and extension reload.
 
 ### 3. Or load manually
 
@@ -123,7 +127,6 @@ Then in Firefox:
 | `npm run dev`          | Watch + auto-reload in Firefox                |
 | `npm run build:dev`    | Development build with source maps            |
 | `npm run build:prod`   | Optimised production build                    |
-| `npm run watch`        | Webpack watch mode (no browser launch)        |
 | `npm test`             | Run all tests                                 |
 | `npm run test:watch`   | Run tests in watch mode                       |
 | `npm run test:coverage`| Generate coverage report                      |
@@ -136,7 +139,7 @@ Then in Firefox:
 ## Technology Stack
 
 - **TypeScript** -- strict mode, explicit return types
-- **Webpack** -- bundling with separate entry points for background, content, and popup scripts
+- **Vite** + **vite-plugin-web-extension** -- unified build with automatic entry point discovery from `manifest.json`
 - **Jest** -- unit testing with `ts-jest` and `jsdom` environment
 - **ESLint** -- code quality enforcement
 - **web-ext** -- Firefox extension development tooling

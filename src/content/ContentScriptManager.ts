@@ -2,12 +2,9 @@
  * Content script manager with singleton pattern and component lifecycle management
  */
 
-import type { 
-  SessionUpdateMessage,
-  SettingsChangeMessage
-} from '../../types';
-import { MessageRouter } from './messaging/MessageRouter';
-import { TimeDisplayPill } from './components/TimeDisplayPill';
+import type { SessionUpdateMessage, SettingsChangeMessage } from "../../types";
+import { MessageRouter } from "./messaging/MessageRouter";
+import { TimeDisplayPill } from "./components/TimeDisplayPill";
 
 export class ContentScriptManager {
   private static instance: ContentScriptManager | null = null;
@@ -50,7 +47,9 @@ export class ContentScriptManager {
         return;
       }
 
-      console.log(`ContentScriptManager initializing for domain: ${this.currentDomain}`);
+      console.log(
+        `ContentScriptManager initializing for domain: ${this.currentDomain}`,
+      );
 
       // Initialize message router
       this.messageRouter.initialize();
@@ -68,10 +67,13 @@ export class ContentScriptManager {
       await this.requestInitialState();
 
       this.isInitialized = true;
-      console.log('ContentScriptManager initialized successfully');
+      console.log("ContentScriptManager initialized successfully");
     } catch (error) {
-      console.error('ContentScriptManager.initialize error:', error);
-      await this.reportError('ContentScriptManager initialization failed', error);
+      console.error("ContentScriptManager.initialize error:", error);
+      await this.reportError(
+        "ContentScriptManager initialization failed",
+        error,
+      );
       throw error;
     }
   }
@@ -109,7 +111,7 @@ export class ContentScriptManager {
    */
   public unregisterComponent(componentName: string): void {
     const component = this.components.get(componentName);
-    if (component && typeof component.destroy === 'function') {
+    if (component && typeof component.destroy === "function") {
       component.destroy();
     }
     this.components.delete(componentName);
@@ -130,10 +132,13 @@ export class ContentScriptManager {
     if (newDomain !== this.currentDomain) {
       console.log(`Domain changed from ${this.currentDomain} to ${newDomain}`);
       this.currentDomain = newDomain;
-      
+
       // Request new session state for the new domain
-      this.requestInitialState().catch(error => {
-        console.error('Failed to request session state after domain change:', error);
+      this.requestInitialState().catch((error) => {
+        console.error(
+          "Failed to request session state after domain change:",
+          error,
+        );
       });
     }
   }
@@ -145,11 +150,11 @@ export class ContentScriptManager {
     try {
       // Create and register TimeDisplayPill
       const timeDisplayPill = new TimeDisplayPill();
-      this.registerComponent('timeDisplayPill', timeDisplayPill);
-      
-      console.log('Components initialized successfully');
+      this.registerComponent("timeDisplayPill", timeDisplayPill);
+
+      console.log("Components initialized successfully");
     } catch (error) {
-      console.error('ContentScriptManager.initializeComponents error:', error);
+      console.error("ContentScriptManager.initializeComponents error:", error);
       throw error;
     }
   }
@@ -159,40 +164,64 @@ export class ContentScriptManager {
    */
   private registerMessageHandlers(): void {
     // Handle session updates from background
-    this.messageRouter.registerHandler<SessionUpdateMessage>('SESSION_UPDATE', async (message) => {
-      try {
-        console.log('ContentScriptManager received session update:', message.payload);
-        
-        // Broadcast to all registered components
-        this.broadcastToComponents('onSessionUpdate', message.payload);
-        
-        return { success: true };
-      } catch (error) {
-        console.error('ContentScriptManager.handleSessionUpdate error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Session update handling failed'
-        };
-      }
-    });
+    this.messageRouter.registerHandler<SessionUpdateMessage>(
+      "SESSION_UPDATE",
+      async (message) => {
+        try {
+          console.log(
+            "ContentScriptManager received session update:",
+            message.payload,
+          );
+
+          // Broadcast to all registered components
+          this.broadcastToComponents("onSessionUpdate", message.payload);
+
+          return { success: true };
+        } catch (error) {
+          console.error(
+            "ContentScriptManager.handleSessionUpdate error:",
+            error,
+          );
+          return {
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Session update handling failed",
+          };
+        }
+      },
+    );
 
     // Handle settings changes from background
-    this.messageRouter.registerHandler<SettingsChangeMessage>('SETTINGS_CHANGE', async (message) => {
-      try {
-        console.log('ContentScriptManager received settings change:', message.payload);
-        
-        // Broadcast to all registered components
-        this.broadcastToComponents('onSettingsChange', message.payload);
-        
-        return { success: true };
-      } catch (error) {
-        console.error('ContentScriptManager.handleSettingsChange error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Settings change handling failed'
-        };
-      }
-    });
+    this.messageRouter.registerHandler<SettingsChangeMessage>(
+      "SETTINGS_CHANGE",
+      async (message) => {
+        try {
+          console.log(
+            "ContentScriptManager received settings change:",
+            message.payload,
+          );
+
+          // Broadcast to all registered components
+          this.broadcastToComponents("onSettingsChange", message.payload);
+
+          return { success: true };
+        } catch (error) {
+          console.error(
+            "ContentScriptManager.handleSettingsChange error:",
+            error,
+          );
+          return {
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Settings change handling failed",
+          };
+        }
+      },
+    );
   }
 
   /**
@@ -201,19 +230,21 @@ export class ContentScriptManager {
   private async requestInitialState(): Promise<void> {
     try {
       console.log(`Requesting session state for domain: ${this.currentDomain}`);
-      const response = await this.messageRouter.requestSessionState(this.currentDomain);
-      
+      const response = await this.messageRouter.requestSessionState(
+        this.currentDomain,
+      );
+
       if (response.success && response.data) {
         // Broadcast initial state to components
-        this.broadcastToComponents('onSessionUpdate', response.data);
+        this.broadcastToComponents("onSessionUpdate", response.data);
       } else {
-        console.log('No active session for current domain');
+        console.log("No active session for current domain");
         // Broadcast null state to components
-        this.broadcastToComponents('onSessionUpdate', null);
+        this.broadcastToComponents("onSessionUpdate", null);
       }
     } catch (error) {
-      console.error('ContentScriptManager.requestInitialState error:', error);
-      await this.reportError('Failed to request initial session state', error);
+      console.error("ContentScriptManager.requestInitialState error:", error);
+      await this.reportError("Failed to request initial session state", error);
     }
   }
 
@@ -223,11 +254,14 @@ export class ContentScriptManager {
   private broadcastToComponents(methodName: string, ...args: any[]): void {
     for (const [name, component] of this.components.entries()) {
       try {
-        if (component && typeof component[methodName] === 'function') {
+        if (component && typeof component[methodName] === "function") {
           component[methodName](...args);
         }
       } catch (error) {
-        console.error(`Error calling ${methodName} on component ${name}:`, error);
+        console.error(
+          `Error calling ${methodName} on component ${name}:`,
+          error,
+        );
       }
     }
   }
@@ -237,8 +271,10 @@ export class ContentScriptManager {
    */
   private async waitForDOMReady(): Promise<void> {
     return new Promise<void>((resolve) => {
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => resolve(), {
+          once: true,
+        });
       } else {
         resolve();
       }
@@ -254,7 +290,7 @@ export class ContentScriptManager {
       const parsedUrl = new URL(url);
       return parsedUrl.hostname;
     } catch {
-      return 'unknown';
+      return "unknown";
     }
   }
 
@@ -263,12 +299,16 @@ export class ContentScriptManager {
    */
   private async reportError(context: string, error: unknown): Promise<void> {
     try {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       const stackTrace = error instanceof Error ? error.stack : undefined;
-      
+
       await this.messageRouter.reportError(errorMessage, context, stackTrace);
     } catch (reportError) {
-      console.error('Failed to report error to background service:', reportError);
+      console.error(
+        "Failed to report error to background service:",
+        reportError,
+      );
     }
   }
 
@@ -283,7 +323,7 @@ export class ContentScriptManager {
     try {
       // Destroy all registered components
       for (const [_, component] of this.components.entries()) {
-        if (component && typeof component.destroy === 'function') {
+        if (component && typeof component.destroy === "function") {
           component.destroy();
         }
       }
@@ -293,9 +333,9 @@ export class ContentScriptManager {
       this.messageRouter.destroy();
 
       this.isInitialized = false;
-      console.log('ContentScriptManager destroyed');
+      console.log("ContentScriptManager destroyed");
     } catch (error) {
-      console.error('ContentScriptManager.destroy error:', error);
+      console.error("ContentScriptManager.destroy error:", error);
     }
   }
 }
