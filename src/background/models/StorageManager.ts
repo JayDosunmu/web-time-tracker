@@ -2,22 +2,36 @@
  * Type-safe storage abstraction for browser.storage.local
  */
 
-import type { StorageSchema, DomainData, ExtensionSettings, ActiveSession } from '../../../types';
+import type {
+  DomainData,
+  ExtensionSettings,
+  ActiveSession,
+} from "../../../types";
 
 type StorageArea = browser.storage.StorageArea;
+
+export interface StorageSchema {
+  domains: Record<string, DomainData>;
+  activeSession: ActiveSession | null;
+  settings: ExtensionSettings;
+  version: number; // For data migration
+  installDate: number; // When extension was first installed
+}
 
 export class StorageManager {
   private static instance: StorageManager | null = null;
   private storage: StorageArea;
-  
+
   private constructor(storage: StorageArea) {
     this.storage = storage;
   }
-  
+
   public static getInstance(storage?: StorageArea): StorageManager {
     if (!StorageManager.instance) {
       if (!storage) {
-        throw new Error('StorageManager must be initialized with storage parameter on first call');
+        throw new Error(
+          "StorageManager must be initialized with storage parameter on first call",
+        );
       }
       StorageManager.instance = new StorageManager(storage);
     }
@@ -35,14 +49,14 @@ export class StorageManager {
    * Get data from storage with type safety
    */
   async get<K extends keyof StorageSchema>(
-    keys: K | K[]
+    keys: K | K[],
   ): Promise<Partial<Pick<StorageSchema, K>>> {
     try {
       const keyArray = Array.isArray(keys) ? keys : [keys];
       const result = await this.storage.get(keyArray);
       return result as Partial<Pick<StorageSchema, K>>;
     } catch (error) {
-      console.error('StorageManager.get error:', error);
+      console.error("StorageManager.get error:", error);
       throw new Error(`Failed to get storage data: ${error}`);
     }
   }
@@ -51,12 +65,12 @@ export class StorageManager {
    * Set data in storage with type safety
    */
   async set<K extends keyof StorageSchema>(
-    items: Partial<Pick<StorageSchema, K>>
+    items: Partial<Pick<StorageSchema, K>>,
   ): Promise<void> {
     try {
       await this.storage.set(items);
     } catch (error) {
-      console.error('StorageManager.set error:', error);
+      console.error("StorageManager.set error:", error);
       throw new Error(`Failed to set storage data: ${error}`);
     }
   }
@@ -64,11 +78,13 @@ export class StorageManager {
   /**
    * Remove data from storage
    */
-  async remove(keys: keyof StorageSchema | (keyof StorageSchema)[]): Promise<void> {
+  async remove(
+    keys: keyof StorageSchema | (keyof StorageSchema)[],
+  ): Promise<void> {
     try {
       await this.storage.remove(keys as string | string[]);
     } catch (error) {
-      console.error('StorageManager.remove error:', error);
+      console.error("StorageManager.remove error:", error);
       throw new Error(`Failed to remove storage data: ${error}`);
     }
   }
@@ -80,7 +96,7 @@ export class StorageManager {
     try {
       await this.storage.clear();
     } catch (error) {
-      console.error('StorageManager.clear error:', error);
+      console.error("StorageManager.clear error:", error);
       throw new Error(`Failed to clear storage data: ${error}`);
     }
   }
@@ -90,17 +106,23 @@ export class StorageManager {
    */
   async getAll(): Promise<StorageSchema> {
     try {
-      const data = await this.get(['domains', 'activeSession', 'settings', 'version', 'installDate']);
-      
+      const data = await this.get([
+        "domains",
+        "activeSession",
+        "settings",
+        "version",
+        "installDate",
+      ]);
+
       return {
         domains: data.domains || {},
         activeSession: data.activeSession || null,
         settings: data.settings || this.getDefaultSettings(),
         version: data.version || 1,
-        installDate: data.installDate || Date.now()
+        installDate: data.installDate || Date.now(),
       };
     } catch (error) {
-      console.error('StorageManager.getAll error:', error);
+      console.error("StorageManager.getAll error:", error);
       throw new Error(`Failed to get all storage data: ${error}`);
     }
   }
@@ -110,27 +132,27 @@ export class StorageManager {
    */
   async initialize(): Promise<void> {
     try {
-      const existing = await this.get(['version', 'installDate', 'settings']);
-      
+      const existing = await this.get(["version", "installDate", "settings"]);
+
       const updates: Partial<StorageSchema> = {};
-      
+
       if (!existing.version) {
         updates.version = 1;
       }
-      
+
       if (!existing.installDate) {
         updates.installDate = Date.now();
       }
-      
+
       if (!existing.settings) {
         updates.settings = this.getDefaultSettings();
       }
-      
+
       if (Object.keys(updates).length > 0) {
         await this.set(updates);
       }
     } catch (error) {
-      console.error('StorageManager.initialize error:', error);
+      console.error("StorageManager.initialize error:", error);
       throw new Error(`Failed to initialize storage: ${error}`);
     }
   }
@@ -140,10 +162,10 @@ export class StorageManager {
    */
   async getDomainData(domain: string): Promise<DomainData> {
     try {
-      const { domains } = await this.get(['domains']);
+      const { domains } = await this.get(["domains"]);
       return domains?.[domain] || this.createEmptyDomainData();
     } catch (error) {
-      console.error('StorageManager.getDomainData error:', error);
+      console.error("StorageManager.getDomainData error:", error);
       return this.createEmptyDomainData();
     }
   }
@@ -151,26 +173,30 @@ export class StorageManager {
   /**
    * Update domain data atomically
    */
-  async updateDomainData(domain: string, updates: Partial<DomainData>): Promise<void> {
+  async updateDomainData(
+    domain: string,
+    updates: Partial<DomainData>,
+  ): Promise<void> {
     try {
-      const { domains } = await this.get(['domains']);
+      const { domains } = await this.get(["domains"]);
       const currentDomains = domains || {};
-      const currentDomainData = currentDomains[domain] || this.createEmptyDomainData();
-      
+      const currentDomainData =
+        currentDomains[domain] || this.createEmptyDomainData();
+
       const updatedDomainData: DomainData = {
         ...currentDomainData,
         ...updates,
-        lastAccessed: Date.now()
+        lastAccessed: Date.now(),
       };
-      
+
       await this.set({
         domains: {
           ...currentDomains,
-          [domain]: updatedDomainData
-        }
+          [domain]: updatedDomainData,
+        },
       });
     } catch (error) {
-      console.error('StorageManager.updateDomainData error:', error);
+      console.error("StorageManager.updateDomainData error:", error);
       throw new Error(`Failed to update domain data for ${domain}: ${error}`);
     }
   }
@@ -180,10 +206,10 @@ export class StorageManager {
    */
   async getActiveSession(): Promise<ActiveSession | null> {
     try {
-      const { activeSession } = await this.get(['activeSession']);
+      const { activeSession } = await this.get(["activeSession"]);
       return activeSession || null;
     } catch (error) {
-      console.error('StorageManager.getActiveSession error:', error);
+      console.error("StorageManager.getActiveSession error:", error);
       return null;
     }
   }
@@ -195,7 +221,7 @@ export class StorageManager {
     try {
       await this.set({ activeSession: session });
     } catch (error) {
-      console.error('StorageManager.setActiveSession error:', error);
+      console.error("StorageManager.setActiveSession error:", error);
       throw new Error(`Failed to set active session: ${error}`);
     }
   }
@@ -205,10 +231,10 @@ export class StorageManager {
    */
   async getSettings(): Promise<ExtensionSettings> {
     try {
-      const { settings } = await this.get(['settings']);
+      const { settings } = await this.get(["settings"]);
       return settings || this.getDefaultSettings();
     } catch (error) {
-      console.error('StorageManager.getSettings error:', error);
+      console.error("StorageManager.getSettings error:", error);
       return this.getDefaultSettings();
     }
   }
@@ -221,12 +247,12 @@ export class StorageManager {
       const currentSettings = await this.getSettings();
       const updatedSettings: ExtensionSettings = {
         ...currentSettings,
-        ...updates
+        ...updates,
       };
-      
+
       await this.set({ settings: updatedSettings });
     } catch (error) {
-      console.error('StorageManager.updateSettings error:', error);
+      console.error("StorageManager.updateSettings error:", error);
       throw new Error(`Failed to update settings: ${error}`);
     }
   }
@@ -239,7 +265,7 @@ export class StorageManager {
       totalTime: 0,
       sessions: [],
       dailyStats: {},
-      lastAccessed: Date.now()
+      lastAccessed: Date.now(),
     };
   }
 
@@ -248,10 +274,11 @@ export class StorageManager {
    */
   private getDefaultSettings(): ExtensionSettings {
     return {
-      pillPosition: 'top-right',
+      // Default to top-right: use large x value that will be clamped to right edge
+      pillPosition: { x: 9999, y: 20 },
       pillVisibility: true,
       dataRetentionDays: 30,
-      excludedDomains: []
+      excludedDomains: [],
     };
   }
 }

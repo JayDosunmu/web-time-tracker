@@ -25,19 +25,16 @@ export interface DomainData {
   lastAccessed: number; // Last time this domain was visited
 }
 
+export interface PillPosition {
+  x: number;
+  y: number;
+}
+
 export interface ExtensionSettings {
-  pillPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  pillPosition: PillPosition;
   pillVisibility: boolean;
   dataRetentionDays: number; // How many days to keep detailed session data
   excludedDomains: string[]; // Domains to ignore for tracking
-}
-
-export interface StorageSchema {
-  domains: Record<string, DomainData>;
-  activeSession: ActiveSession | null;
-  settings: ExtensionSettings;
-  version: number; // For data migration
-  installDate: number; // When extension was first installed
 }
 
 export interface TimeAggregation {
@@ -74,4 +71,4 @@ export interface MigrationData {
 }
 
 // Re-export message types
-export * from './messages';
+export * from "./messages";

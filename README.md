@@ -4,11 +4,24 @@ A Firefox extension that tracks time spent on different websites. It displays a 
 
 ## Features
 
-- **Floating Timer Pill** -- always-visible overlay showing elapsed time on the current domain
+### Timer Pill
+- **Floating Timer Display** -- always-visible overlay showing elapsed time in HH:MM:SS format
+- **Draggable Positioning** -- drag the pill to any position on screen; position persists across sessions
+- **Hover-to-Hide** -- mouseover hides the pill content, showing only a subtle border indicator for its position
+- **Connection Status** -- displays `--:--:--` while connecting to background service
+
+### Time Tracking
+- **Per-Domain Tracking** -- time is tracked separately for each website domain
+- **Daily Bucketing** -- time totals reset at midnight; each day's data is stored independently
+- **Historical Intervals** -- stores the start/end timestamps of every viewing session per domain
 - **Automatic Session Management** -- tracking pauses when you switch tabs or lose window focus, and resumes when you return
-- **Domain-Level Aggregation** -- time is rolled up by domain with daily, weekly, and monthly breakdowns
+
+### Popup Interface
+- **Current Session Display** -- shows active session time with domain name
+- **Today's Total** -- aggregated time across all domains for the current day
+
+### Privacy & Data
 - **Privacy-First** -- all data stored in `browser.storage.local`; nothing is transmitted externally
-- **Configurable** -- pill position, visibility, and domain exclusion lists
 
 ## Architecture
 
@@ -47,41 +60,6 @@ A Firefox extension that tracks time spent on different websites. It displays a 
 
 **Storage Layer** -- All state lives in `browser.storage.local`. Sessions are stored with millisecond precision and aggregated into daily buckets to keep storage bounded.
 
-## Project Structure
-
-```
-src/
-├── background/
-│   ├── background.ts              # Entry point, BackgroundService class
-│   ├── services/
-│   │   └── TimeTracker.ts         # Core time tracking logic
-│   └── models/
-│       └── StorageManager.ts      # Type-safe storage abstraction
-├── content/
-│   ├── content.ts                 # Entry point
-│   ├── ContentScriptManager.ts    # Lifecycle and component coordination
-│   ├── components/
-│   │   ├── TimeDisplayPill.tsx    # Floating timer (Preact + Shadow DOM)
-│   │   └── TimeDisplayPill.styles.css
-│   ├── messaging/
-│   │   └── MessageRouter.ts       # Typed message passing
-│   └── styles/
-│       └── content.css            # Host element styles
-├── popup/
-│   ├── popup.html                 # Popup entry point
-│   ├── popup.tsx                  # Preact mount
-│   ├── popup.css                  # Popup styles
-│   └── App.tsx                    # Popup root component
-types/
-├── index.ts                       # Storage schema, session types
-└── messages.ts                    # Message union types
-
-tests/
-├── setup.ts                       # Test environment bootstrap
-├── fixtures.ts                    # Shared mock data
-└── utils.ts                       # Browser API mocking utilities
-```
-
 ## Prerequisites
 
 | Requirement | Version |
@@ -119,22 +97,6 @@ Then in Firefox:
 1. Navigate to `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on...**
 3. Select `dist/manifest.json`
-
-### Available Scripts
-
-| Command                | Purpose                                       |
-|------------------------|-----------------------------------------------|
-| `npm run dev`          | Watch + auto-reload in Firefox                |
-| `npm run build:dev`    | Development build with source maps            |
-| `npm run build:prod`   | Optimised production build                    |
-| `npm test`             | Run all tests                                 |
-| `npm run test:watch`   | Run tests in watch mode                       |
-| `npm run test:coverage`| Generate coverage report                      |
-| `npm run type-check`   | TypeScript type checking (no emit)            |
-| `npm run lint`         | ESLint analysis                               |
-| `npm run lint:fix`     | Auto-fix lint issues                          |
-| `npm run package`      | Package extension into a distributable `.zip` |
-| `npm run clean`        | Remove `build/` and `dist/` directories       |
 
 ## Technology Stack
 

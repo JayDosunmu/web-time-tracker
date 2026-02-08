@@ -1,25 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- Background circle with gradient matching the pill theme -->
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#667eea"/>
-      <stop offset="100%" stop-color="#764ba2"/>
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
     </linearGradient>
+    <mask id="hg">
+      <rect width="128" height="128" fill="black"/>
+      <path d="M 40 26 L 88 26 L 88 32 L 85 32 L 67 64 L 85 96 L 88 96 L 88 102 L 40 102 L 40 96 L 43 96 L 61 64 L 43 32 L 40 32 Z" fill="white"/>
+      <text x="64" y="46" text-anchor="middle" dominant-baseline="central"
+            font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="24"
+            fill="black">5</text>
+    </mask>
   </defs>
-  <circle cx="64" cy="64" r="60" fill="url(#bg)"/>
-  <!-- Clock face -->
-  <circle cx="64" cy="64" r="44" fill="none" stroke="white" stroke-width="4" opacity="0.3"/>
-  <!-- Hour marks -->
-  <line x1="64" y1="24" x2="64" y2="30" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="64" y1="98" x2="64" y2="104" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="24" y1="64" x2="30" y2="64" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="98" y1="64" x2="104" y2="64" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <!-- Minute hand -->
-  <line x1="64" y1="64" x2="64" y2="32" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <!-- Hour hand -->
-  <line x1="64" y1="64" x2="82" y2="50" stroke="white" stroke-width="5" stroke-linecap="round"/>
-  <!-- Center dot -->
-  <circle cx="64" cy="64" r="4" fill="white"/>
-  <!-- Activity indicator (matches pill status dot) -->
-  <circle cx="98" cy="30" r="10" fill="#4ade80"/>
+  <!-- Rounded hexagon (points vertical, squircle-like corners) -->
+  <path d="M 50.1 14 Q 64 6, 77.9 14 L 100.3 27 Q 114.2 35, 114.2 51 L 114.2 77 Q 114.2 93, 100.3 101 L 77.9 114 Q 64 122, 50.1 114 L 27.7 101 Q 13.8 93, 13.8 77 L 13.8 51 Q 13.8 35, 27.7 27 Z" fill="url(#bg)"/>
+  <!-- White hourglass with punched-out 5 -->
+  <rect width="128" height="128" fill="white" mask="url(#hg)"/>
 </svg>

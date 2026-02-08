@@ -229,8 +229,8 @@ describe("ContentScriptManager", () => {
   });
 
   describe("Message Handling", () => {
-    let sessionUpdateHandler: jest.Mock;
-    let settingsChangeHandler: jest.Mock;
+    let sessionUpdateHandler: (message: any) => Promise<any>;
+    let settingsChangeHandler: (message: any) => Promise<any>;
 
     beforeEach(async () => {
       mockMessageRouter.requestSessionState.mockResolvedValue({
@@ -238,14 +238,27 @@ describe("ContentScriptManager", () => {
       });
       await contentManager.initialize();
 
-      // Get the registered handlers
+      // Get the registered handlers - wrapping the 3-arg handler to simplify testing
       const registerCalls = mockMessageRouter.registerHandler.mock.calls;
-      sessionUpdateHandler = registerCalls.find(
+      const sessionCall = registerCalls.find(
         (call) => call[0] === "SESSION_UPDATE",
-      )?.[1];
-      settingsChangeHandler = registerCalls.find(
+      );
+      const settingsCall = registerCalls.find(
         (call) => call[0] === "SETTINGS_CHANGE",
-      )?.[1];
+      );
+      const rawSessionHandler = sessionCall![1];
+      const rawSettingsHandler = settingsCall![1];
+      // Wrap handlers to call with mock sender and sendResponse for testing
+      const mockSender = {} as browser.runtime.MessageSender;
+      const mockSendResponse = jest.fn();
+      sessionUpdateHandler = (message: any) =>
+        Promise.resolve(rawSessionHandler(message, mockSender, mockSendResponse)).then(
+          (result) => (typeof result === "boolean" ? { success: result } : result),
+        );
+      settingsChangeHandler = (message: any) =>
+        Promise.resolve(rawSettingsHandler(message, mockSender, mockSendResponse)).then(
+          (result) => (typeof result === "boolean" ? { success: result } : result),
+        );
     });
 
     it("should register message handlers", () => {
@@ -286,7 +299,7 @@ describe("ContentScriptManager", () => {
         type: "SETTINGS_CHANGE",
         payload: {
           pillPosition: { x: 10, y: 10 },
-          pillVisibility: "always",
+          pillVisibility: true,
           excludedDomains: ["blocked.com"],
         },
         id: "test-id",
@@ -398,7 +411,7 @@ describe("ContentScriptManager", () => {
       await contentManager.initialize();
     });
 
-    it("should report component broadcast errors", () => {
+    it("should report component broadcast errors", async () => {
       const brokenComponent = {
         onSessionUpdate: jest.fn().mockImplementation(() => {
           throw new Error("Component broken");
@@ -409,9 +422,11 @@ describe("ContentScriptManager", () => {
 
       // Trigger a broadcast
       const registerCalls = mockMessageRouter.registerHandler.mock.calls;
-      const sessionUpdateHandler = registerCalls.find(
+      const sessionCall = registerCalls.find(
         (call) => call[0] === "SESSION_UPDATE",
-      )?.[1];
+      );
+      expect(sessionCall).toBeDefined();
+      const rawHandler = sessionCall![1];
 
       const sessionMessage: SessionUpdateMessage = {
         type: "SESSION_UPDATE",
@@ -427,9 +442,11 @@ describe("ContentScriptManager", () => {
       };
 
       // Should not throw despite component error
-      expect(
-        async () => await sessionUpdateHandler(sessionMessage),
-      ).not.toThrow();
+      const mockSender = {} as browser.runtime.MessageSender;
+      const mockSendResponse = jest.fn();
+      await expect(
+        Promise.resolve(rawHandler(sessionMessage, mockSender, mockSendResponse)),
+      ).resolves.not.toThrow();
     });
   });
 
