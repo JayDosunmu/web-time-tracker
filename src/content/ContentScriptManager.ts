@@ -12,6 +12,7 @@ export class ContentScriptManager {
   private isInitialized = false;
   private currentDomain: string;
   private components = new Map<string, any>();
+  private visibilityHandler: (() => void) | null = null;
 
   private constructor() {
     this.messageRouter = new MessageRouter();
@@ -62,6 +63,9 @@ export class ContentScriptManager {
 
       // Initialize and register components
       await this.initializeComponents();
+
+      // Setup visibility change handler for reconnection
+      this.setupVisibilityHandler();
 
       // Request initial session state from background
       await this.requestInitialState();
@@ -225,27 +229,66 @@ export class ContentScriptManager {
   }
 
   /**
-   * Request initial session state from background service
+   * Request initial session state from background service with retry logic
    */
   private async requestInitialState(): Promise<void> {
-    try {
-      console.log(`Requesting session state for domain: ${this.currentDomain}`);
-      const response = await this.messageRouter.requestSessionState(
-        this.currentDomain,
-      );
+    const maxRetries = 5;
+    const baseDelay = 100; // milliseconds
+    let lastError: unknown = null;
 
-      if (response.success && response.data) {
-        // Broadcast initial state to components
-        this.broadcastToComponents("onSessionUpdate", response.data);
-      } else {
-        console.log("No active session for current domain");
-        // Broadcast null state to components
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(
+          `Requesting session state for domain: ${this.currentDomain} (attempt ${attempt + 1}/${maxRetries})`,
+        );
+        const response = await this.messageRouter.requestSessionState(
+          this.currentDomain,
+        );
+
+        if (response.success) {
+          // Success - broadcast state to components (may be null if no active session)
+          this.broadcastToComponents("onSessionUpdate", response.data || null);
+          return;
+        }
+
+        // Check if error indicates background not ready
+        const errorMsg = response.error || "";
+        if (
+          errorMsg.includes("No response") ||
+          errorMsg.includes("Could not establish connection") ||
+          errorMsg.includes("receiving end does not exist")
+        ) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`Background not ready, retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // Other error - don't retry
+        console.warn("Failed to get session state:", response.error);
         this.broadcastToComponents("onSessionUpdate", null);
+        return;
+      } catch (error) {
+        lastError = error;
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.error(`Request failed (attempt ${attempt + 1}):`, error);
+
+        if (attempt < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
       }
-    } catch (error) {
-      console.error("ContentScriptManager.requestInitialState error:", error);
-      await this.reportError("Failed to request initial session state", error);
     }
+
+    // All retries exhausted - report the error
+    console.warn(
+      "Could not establish connection to background service after retries",
+    );
+
+    if (lastError) {
+      await this.reportError("Failed to request initial session state", lastError);
+    }
+
+    this.broadcastToComponents("onSessionUpdate", null);
   }
 
   /**
@@ -264,6 +307,23 @@ export class ContentScriptManager {
         );
       }
     }
+  }
+
+  /**
+   * Setup visibility change handler for tab reconnection
+   * When tab becomes visible again, request fresh state from background
+   */
+  private setupVisibilityHandler(): void {
+    this.visibilityHandler = (): void => {
+      if (document.visibilityState === 'visible') {
+        console.log('Tab became visible, requesting fresh session state');
+        this.requestInitialState().catch((error) => {
+          console.error('Failed to request session state on visibility change:', error);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', this.visibilityHandler);
   }
 
   /**
@@ -321,6 +381,12 @@ export class ContentScriptManager {
     }
 
     try {
+      // Remove visibility change listener
+      if (this.visibilityHandler) {
+        document.removeEventListener('visibilitychange', this.visibilityHandler);
+        this.visibilityHandler = null;
+      }
+
       // Destroy all registered components
       for (const [_, component] of this.components.entries()) {
         if (component && typeof component.destroy === "function") {

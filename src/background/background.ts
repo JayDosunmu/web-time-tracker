@@ -12,8 +12,8 @@ import type {
   SettingsChangeMessage,
   ErrorReportMessage
 } from '../../types';
-import type { StorageManager } from './models/StorageManager';
-import type { TimeTracker } from './services/TimeTracker';
+import { StorageManager } from './models/StorageManager';
+import { TimeTracker } from './services/TimeTracker';
 
 export class BackgroundService {
   private static instance: BackgroundService | null = null;
@@ -207,13 +207,13 @@ export class BackgroundService {
   }
 
   /**
-   * Broadcast session updates to all content scripts
+   * Send session update to a specific tab
    */
-  private async broadcastSessionUpdate(session: ActiveSession): Promise<void> {
+  private async sendSessionUpdate(session: ActiveSession): Promise<void> {
     try {
       const currentTime = this.timeTracker.getSessionDuration(session);
-      
-      const updateMessage: Omit<SessionUpdateMessage, 'id' | 'timestamp'> = {
+
+      const updateMessage: SessionUpdateMessage = {
         type: 'SESSION_UPDATE',
         payload: {
           domain: session.domain,
@@ -221,28 +221,20 @@ export class BackgroundService {
           isActive: !session.isPaused,
           isPaused: session.isPaused || false,
           startTime: session.startTime
-        }
+        },
+        id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+        timestamp: Date.now()
       };
 
-      // Get all tabs to broadcast to
-      const tabs = await browser.tabs.query({});
-      
-      for (const tab of tabs) {
-        if (tab.id && tab.url && this.isValidUrl(tab.url)) {
-          try {
-            await browser.tabs.sendMessage(tab.id, {
-              ...updateMessage,
-              id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-              timestamp: Date.now()
-            });
-          } catch (error) {
-            // Content script may not be loaded on this tab - this is normal
-            console.debug(`Failed to send message to tab ${tab.id}:`, error);
-          }
-        }
+      // Send only to the session's tab
+      try {
+        await browser.tabs.sendMessage(session.tabId, updateMessage);
+      } catch (error) {
+        // Content script may not be loaded on this tab - this is normal
+        console.debug(`Failed to send message to tab ${session.tabId}:`, error);
       }
     } catch (error) {
-      console.error('BackgroundService.broadcastSessionUpdate error:', error);
+      console.error('BackgroundService.sendSessionUpdate error:', error);
     }
   }
 
@@ -331,7 +323,7 @@ export class BackgroundService {
       const newSession = await this.timeTracker.startSession(domain, activeInfo.tabId, activeInfo.windowId);
       
       // Broadcast session update to content scripts
-      await this.broadcastSessionUpdate(newSession);
+      await this.sendSessionUpdate(newSession);
       
       console.log(`Started tracking session for domain: ${domain}`);
     } catch (error) {
@@ -375,7 +367,7 @@ export class BackgroundService {
       const newSession = await this.timeTracker.startSession(domain, tabId, tab.windowId!);
       
       // Broadcast session update to content scripts
-      await this.broadcastSessionUpdate(newSession);
+      await this.sendSessionUpdate(newSession);
       
       console.log(`URL changed - started tracking session for domain: ${domain}`);
     } catch (error) {
@@ -399,7 +391,7 @@ export class BackgroundService {
         // Window lost focus - pause tracking
         const pausedSession = await this.timeTracker.pauseSession();
         if (pausedSession) {
-          await this.broadcastSessionUpdate(pausedSession);
+          await this.sendSessionUpdate(pausedSession);
         }
         console.log('Window lost focus - paused tracking');
       } else {
@@ -407,7 +399,7 @@ export class BackgroundService {
         if (activeSession.isPaused) {
           const resumedSession = await this.timeTracker.resumeSession();
           if (resumedSession) {
-            await this.broadcastSessionUpdate(resumedSession);
+            await this.sendSessionUpdate(resumedSession);
           }
           console.log('Window gained focus - resumed tracking');
         }
@@ -461,7 +453,7 @@ export class BackgroundService {
       const newSession = await this.timeTracker.startSession(domain, details.tabId, tab.windowId!);
       
       // Broadcast session update to content scripts
-      await this.broadcastSessionUpdate(newSession);
+      await this.sendSessionUpdate(newSession);
       
       console.log(`Navigation completed - started tracking session for domain: ${domain}`);
     } catch (error) {
@@ -502,3 +494,20 @@ export class BackgroundService {
     }
   }
 }
+
+// --- Bootstrap ---
+
+/**
+ * Initialize and start the background service
+ */
+(async function bootstrap(): Promise<void> {
+  try {
+    const storageManager = StorageManager.getInstance(browser.storage.local);
+    const timeTracker = TimeTracker.getInstance(storageManager);
+    const backgroundService = BackgroundService.getInstance(storageManager, timeTracker);
+    await backgroundService.initialize();
+    console.log('Web Time Tracker background service started');
+  } catch (error) {
+    console.error('Failed to bootstrap background service:', error);
+  }
+})();

@@ -4,11 +4,11 @@
  */
 
 import { render, type FunctionComponent } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
-import type { ExtensionSettings } from '../../../types';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import type { ExtensionSettings, PillPosition } from '../../../types';
 import pillStyles from './TimeDisplayPill.styles.css?inline';
 
-export type PillPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type { PillPosition };
 
 export interface SessionState {
   domain: string;
@@ -27,10 +27,25 @@ function formatTime(milliseconds: number): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  }
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+}
+
+/**
+ * Clamp a position to viewport bounds
+ */
+function clampPosition(
+  x: number,
+  y: number,
+  pillWidth: number,
+  pillHeight: number
+): PillPosition {
+  const maxX = window.innerWidth - pillWidth;
+  const maxY = window.innerHeight - pillHeight;
+  return {
+    x: Math.max(0, Math.min(x, maxX)),
+    y: Math.max(0, Math.min(y, maxY)),
+  };
 }
 
 // ---- Internal Preact Component ----
@@ -39,77 +54,183 @@ interface PillProps {
   sessionState: SessionState | null;
   position: PillPosition;
   visible: boolean;
+  isConnecting: boolean;
+  onPositionChange: (position: PillPosition) => void;
 }
 
-export const Pill: FunctionComponent<PillProps> = ({ sessionState, position, visible }) => {
-  const [displayTime, setDisplayTime] = useState(0);
-  const lastUpdateRef = useRef(0);
-  const animFrameRef = useRef<number | null>(null);
+export const Pill: FunctionComponent<PillProps> = ({
+  sessionState,
+  position,
+  visible,
+  isConnecting,
+  onPositionChange,
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
+
+  const pillRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
+  const boundsRef = useRef({ maxX: 0, maxY: 0 });
 
   const isActive = sessionState?.isActive ?? false;
   const isPaused = sessionState?.isPaused ?? false;
-  const baseTime = sessionState?.currentTime ?? 0;
+  const displayTime = sessionState?.currentTime ?? 0;
 
-  // Update base time reference when session state changes
-  useEffect(() => {
-    lastUpdateRef.current = Date.now();
-    setDisplayTime(baseTime);
-  }, [baseTime]);
+  // Update cached bounds and clamp position
+  const updateBoundsAndPosition = useCallback(() => {
+    if (!pillRef.current) return;
+    const rect = pillRef.current.getBoundingClientRect();
+    boundsRef.current = {
+      maxX: window.innerWidth - rect.width,
+      maxY: window.innerHeight - rect.height,
+    };
+    // Clamp current position to new bounds
+    setClampedPosition(prev => ({
+      x: Math.max(0, Math.min(prev.x, boundsRef.current.maxX)),
+      y: Math.max(0, Math.min(prev.y, boundsRef.current.maxY)),
+    }));
+  }, []);
 
-  // Animation frame loop for live time updates
+  // Initial bounds calculation, position clamp, and resize handler
   useEffect(() => {
-    if (!isActive || isPaused || !visible) {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
+    // Small delay to ensure pill is rendered and has dimensions
+    const timer = setTimeout(() => {
+      updateBoundsAndPosition();
+      // Also clamp the initial position prop
+      if (pillRef.current) {
+        const rect = pillRef.current.getBoundingClientRect();
+        const clamped = clampPosition(position.x, position.y, rect.width, rect.height);
+        setClampedPosition(clamped);
       }
-      return;
+    }, 10);
+
+    window.addEventListener('resize', updateBoundsAndPosition);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateBoundsAndPosition);
+    };
+  }, [updateBoundsAndPosition, position.x, position.y]);
+
+  // Drag handlers
+  const handleMouseDown = (event: MouseEvent): void => {
+    if (event.button !== 0) return; // Only left click
+    event.preventDefault();
+
+    // Calculate offset from mouse to pill corner once
+    const rect = pillRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    dragStartRef.current = {
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+    setIsDragging(true);
+  };
+
+  // Store latest position for mouseup callback
+  const clampedPositionRef = useRef(clampedPosition);
+  clampedPositionRef.current = clampedPosition;
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (event: MouseEvent): void => {
+      if (!dragStartRef.current) return;
+
+      // Direct position calculation using cached offset
+      const newX = event.clientX - dragStartRef.current.offsetX;
+      const newY = event.clientY - dragStartRef.current.offsetY;
+
+      // Clamp using cached bounds (no getBoundingClientRect call)
+      const clampedX = Math.max(0, Math.min(newX, boundsRef.current.maxX));
+      const clampedY = Math.max(0, Math.min(newY, boundsRef.current.maxY));
+
+      setClampedPosition({ x: clampedX, y: clampedY });
+    };
+
+    const handleMouseUp = (): void => {
+      setIsDragging(false);
+      if (dragStartRef.current) {
+        // Notify parent of position change for persistence
+        onPositionChange(clampedPositionRef.current);
+      }
+      dragStartRef.current = null;
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, onPositionChange]);
+
+  const handleMouseEnter = (): void => {
+    if (!isDragging) {
+      setIsHovered(true);
     }
+  };
 
-    lastUpdateRef.current = Date.now();
+  const handleMouseLeave = (): void => {
+    setIsHovered(false);
+  };
 
-    const animate = (): void => {
-      const elapsed = Date.now() - lastUpdateRef.current;
-      setDisplayTime(baseTime + elapsed);
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
+  // Hide pill completely if not visible
+  if (!visible) {
+    return null;
+  }
 
-    animFrameRef.current = requestAnimationFrame(animate);
+  const positionStyle = {
+    left: `${clampedPosition.x}px`,
+    top: `${clampedPosition.y}px`,
+  };
 
-    return (): void => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-    };
-  }, [isActive, isPaused, visible, baseTime]);
+  // Show connecting state while waiting for background service
+  if (isConnecting && !sessionState) {
+    const pillClass = ['pill-content', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
+    return (
+      <div
+        ref={pillRef}
+        class={pillClass}
+        style={positionStyle}
+        onMouseDown={handleMouseDown}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <span class="time-display">--:--:--</span>
+      </div>
+    );
+  }
 
-  if (!sessionState || !visible) {
+  // Hide if no session and not connecting
+  if (!sessionState) {
     return null;
   }
 
   const pillClass = [
     'pill-content',
-    position,
     !isActive ? 'inactive' : '',
     isPaused ? 'paused' : '',
+    isHovered && !isDragging ? 'hovered' : '',
+    isDragging ? 'dragging' : '',
   ].filter(Boolean).join(' ');
-
-  const statusClass = [
-    'status-indicator',
-    !isActive ? 'inactive' : '',
-    isPaused ? 'paused' : '',
-  ].filter(Boolean).join(' ');
-
-  const handleClick = (event: Event): void => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
 
   return (
-    <div class={pillClass} onClick={handleClick}>
-      <span class="time-display">{formatTime(displayTime)}</span>
-      <span class={statusClass} />
+    <div
+      ref={pillRef}
+      class={pillClass}
+      style={positionStyle}
+      onMouseDown={handleMouseDown}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {!isHovered && (
+        <>
+          <span class="time-display">{formatTime(displayTime)}</span>
+        </>
+      )}
     </div>
   );
 };
@@ -124,22 +245,38 @@ export class TimeDisplayPill {
     sessionState: SessionState | null;
     position: PillPosition;
     visible: boolean;
+    isConnecting: boolean;
   };
+  private onPositionChangeCallback: ((position: PillPosition) => void) | null = null;
+  private animationFrameId: number | null = null;
+  private lastUpdateTime = 0;
 
   constructor() {
     this.state = {
       sessionState: null,
-      position: 'top-right',
+      // Default to top-right (will be clamped to actual viewport)
+      position: { x: 9999, y: 20 },
       visible: true,
+      isConnecting: true,
     };
     this.mount();
+  }
+
+  /**
+   * Set callback for position changes (for persistence)
+   */
+  public setPositionChangeCallback(callback: (position: PillPosition) => void): void {
+    this.onPositionChangeCallback = callback;
   }
 
   /**
    * Handle session update from ContentScriptManager broadcast
    */
   public onSessionUpdate(state: SessionState | null): void {
+    const wasAnimating = this.shouldAnimate();
     this.state.sessionState = state;
+    this.state.isConnecting = false; // Connection established
+    this.updateAnimation(wasAnimating);
     this.renderComponent();
   }
 
@@ -147,12 +284,14 @@ export class TimeDisplayPill {
    * Handle settings change from ContentScriptManager broadcast
    */
   public onSettingsChange(settings: Partial<ExtensionSettings>): void {
+    const wasAnimating = this.shouldAnimate();
     if (settings.pillPosition) {
       this.state.position = settings.pillPosition;
     }
     if (typeof settings.pillVisibility === 'boolean') {
       this.state.visible = settings.pillVisibility;
     }
+    this.updateAnimation(wasAnimating);
     this.renderComponent();
   }
 
@@ -160,6 +299,7 @@ export class TimeDisplayPill {
    * Destroy the component and cleanup
    */
   public destroy(): void {
+    this.stopAnimation();
     if (this.container) {
       render(null, this.container);
     }
@@ -171,7 +311,77 @@ export class TimeDisplayPill {
     this.container = null;
   }
 
+  /**
+   * Check if animation should be running
+   */
+  private shouldAnimate(): boolean {
+    const session = this.state.sessionState;
+    if (!session) return false;
+    return session.isActive && !session.isPaused && this.state.visible;
+  }
+
+  /**
+   * Update animation state based on current state
+   */
+  private updateAnimation(wasAnimating: boolean): void {
+    const shouldAnimate = this.shouldAnimate();
+
+    if (wasAnimating && !shouldAnimate) {
+      this.stopAnimation();
+    } else if (!wasAnimating && shouldAnimate) {
+      this.startAnimation();
+    }
+  }
+
+  /**
+   * Start the animation loop
+   */
+  private startAnimation(): void {
+    if (this.animationFrameId !== null) return;
+
+    this.lastUpdateTime = Date.now();
+
+    const animate = (): void => {
+      if (!this.state.sessionState) return;
+
+      const now = Date.now();
+      const elapsed = now - this.lastUpdateTime;
+
+      // Direct mutation - no object allocation needed for class state
+      this.state.sessionState.currentTime += elapsed;
+      this.lastUpdateTime = now;
+
+      this.renderComponent();
+      this.animationFrameId = requestAnimationFrame(animate);
+    };
+
+    this.animationFrameId = requestAnimationFrame(animate);
+  }
+
+  /**
+   * Stop the animation loop
+   */
+  private stopAnimation(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  private handlePositionChange = (position: PillPosition): void => {
+    this.state.position = position;
+    if (this.onPositionChangeCallback) {
+      this.onPositionChangeCallback(position);
+    }
+  };
+
   private mount(): void {
+    // Remove any existing pill (handles extension reload, HMR, re-injection)
+    const existing = document.getElementById('web-time-tracker-pill');
+    if (existing?.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+
     this.element = document.createElement('div');
     this.element.id = 'web-time-tracker-pill';
     this.shadowRoot = this.element.attachShadow({ mode: 'closed' });
@@ -198,6 +408,8 @@ export class TimeDisplayPill {
         sessionState={this.state.sessionState}
         position={this.state.position}
         visible={this.state.visible}
+        isConnecting={this.state.isConnecting}
+        onPositionChange={this.handlePositionChange}
       />,
       this.container,
     );

@@ -2,6 +2,12 @@
  * Core test utilities for storage, messaging, and timers
  */
 
+declare const global: typeof globalThis & {
+  browser: any;
+  requestAnimationFrame: (callback: FrameRequestCallback) => number;
+  cancelAnimationFrame: (handle: number) => void;
+};
+
 /**
  * Test utilities for mocking storage operations
  * Implements StorageArea interface for API compatibility
@@ -165,13 +171,22 @@ export const testUtils = {
       // Already defined, ignore
     }
 
-    // Mock requestAnimationFrame
-    global.requestAnimationFrame = jest.fn((callback) => {
-      setTimeout(callback, 16);
+    // Mock requestAnimationFrame and cancelAnimationFrame on both global and window
+    const mockRequestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+      setTimeout(() => callback(Date.now()), 16);
       return 1;
     });
 
-    global.cancelAnimationFrame = jest.fn();
+    const mockCancelAnimationFrame = jest.fn();
+
+    global.requestAnimationFrame = mockRequestAnimationFrame;
+    global.cancelAnimationFrame = mockCancelAnimationFrame;
+
+    // Also set on window for browser-like environment
+    if (typeof window !== 'undefined') {
+      (window as any).requestAnimationFrame = mockRequestAnimationFrame;
+      (window as any).cancelAnimationFrame = mockCancelAnimationFrame;
+    }
   },
 
   _locationMocked: false

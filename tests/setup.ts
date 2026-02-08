@@ -8,6 +8,15 @@ import chrome from 'sinon-chrome';
 (global as any).browser = chrome;
 (global as any).chrome = chrome;
 
+// Set up requestAnimationFrame/cancelAnimationFrame mocks globally
+// These must be set up before any modules that use them are imported
+(global as any).requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+  return setTimeout(() => callback(Date.now()), 16) as unknown as number;
+});
+(global as any).cancelAnimationFrame = jest.fn((id: number) => {
+  clearTimeout(id);
+});
+
 // Set up common browser API defaults
 beforeEach(() => {
   // Silence console logs
