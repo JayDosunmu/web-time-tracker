@@ -60,6 +60,16 @@ A Firefox extension that tracks time spent on different websites. It displays a 
 
 **Storage Layer** -- All state lives in `browser.storage.local`. Sessions are stored with millisecond precision and aggregated into daily buckets to keep storage bounded.
 
+### Detailed Documentation
+
+For deeper architectural understanding, see the docs folder:
+
+| Document | Description |
+|----------|-------------|
+| [Component Architecture](docs/architecture-components.md) | Component diagram, interfaces, and method signatures for all classes |
+| [Data Flow](docs/architecture-dataflow.md) | How data moves through the system, storage schema, and message flows |
+| [Sequence Diagrams](docs/architecture-sequences.md) | Step-by-step sequences for tab load/unload, focus changes, and SPA navigation |
+
 ## Prerequisites
 
 | Requirement | Version |
