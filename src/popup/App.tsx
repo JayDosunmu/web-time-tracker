@@ -1,5 +1,5 @@
-import { type FunctionComponent } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { type FunctionComponent } from "preact";
+import { useState, useEffect } from "preact/hooks";
 
 interface SessionData {
   domain: string;
@@ -27,22 +27,22 @@ interface PopupState {
 }
 
 /**
- * Format milliseconds to HH:MM:SS display string
+ * Format nanoseconds to HH:MM:SS display string
  */
-function formatTime(milliseconds: number): string {
-  const totalSeconds = Math.floor(milliseconds / 1000);
+function formatTime(nanoseconds: number): string {
+  const totalSeconds = Math.floor(nanoseconds / 1000_000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
 
 /**
  * Get today's date as ISO string (YYYY-MM-DD)
  */
 function getTodayKey(): string {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toISOString().split("T")[0];
 }
 
 export const App: FunctionComponent = () => {
@@ -59,8 +59,13 @@ export const App: FunctionComponent = () => {
     async function loadData(): Promise<void> {
       try {
         // Get current tab to determine domain
-        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-        const currentDomain = activeTab?.url ? new URL(activeTab.url).hostname : null;
+        const [activeTab] = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        const currentDomain = activeTab?.url
+          ? new URL(activeTab.url).hostname
+          : null;
 
         // Get all storage data
         const data = await browser.storage.local.get(null);
@@ -77,8 +82,13 @@ export const App: FunctionComponent = () => {
 
         // Get current session data if active and matches current tab
         let currentSession: SessionData | null = null;
-        if (activeSession && currentDomain && activeSession.domain === currentDomain) {
+        if (
+          activeSession &&
+          currentDomain &&
+          activeSession.domain === currentDomain
+        ) {
           const elapsed = Date.now() - activeSession.startTime;
+          console.log(elapsed);
           currentSession = {
             domain: activeSession.domain,
             currentTime: elapsed,
@@ -106,7 +116,7 @@ export const App: FunctionComponent = () => {
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: error instanceof Error ? error.message : 'Failed to load data',
+          error: error instanceof Error ? error.message : "Failed to load data",
         }));
       }
     }
@@ -114,8 +124,8 @@ export const App: FunctionComponent = () => {
     loadData();
 
     // Update every second for live time display
-    const interval = setInterval(loadData, 1000);
-    return () => clearInterval(interval);
+    const interval = window.setInterval(loadData, 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const toggleDebug = (): void => {
@@ -151,9 +161,7 @@ export const App: FunctionComponent = () => {
             <div class="time-display">
               {formatTime(state.currentSession.currentTime)}
             </div>
-            <div class="domain-name">
-              {state.currentSession.domain}
-            </div>
+            <div class="domain-name">{state.currentSession.domain}</div>
             {state.currentSession.isPaused && (
               <div class="status paused">Paused</div>
             )}
@@ -168,7 +176,10 @@ export const App: FunctionComponent = () => {
       <section class="today-total">
         <h2>Today's Total</h2>
         <div class="time-display total">
-          {formatTime(state.todayTotal)}
+          {
+            // todayTotal's units are millis, formatTime units are nanos
+            formatTime(state.todayTotal * 1000)
+          }
         </div>
       </section>
 
@@ -176,14 +187,16 @@ export const App: FunctionComponent = () => {
 
       <section class="debug-section">
         <button class="debug-toggle" onClick={toggleDebug}>
-          {state.showDebug ? 'Hide' : 'Show'} Storage Data
+          {state.showDebug ? "Hide" : "Show"} Storage Data
         </button>
 
         {state.showDebug && state.storageData && (
           <div class="debug-data">
             <div class="debug-item">
               <h3>Active Session</h3>
-              <pre>{JSON.stringify(state.storageData.activeSession, null, 2)}</pre>
+              <pre>
+                {JSON.stringify(state.storageData.activeSession, null, 2)}
+              </pre>
             </div>
 
             <div class="debug-item">
@@ -198,12 +211,18 @@ export const App: FunctionComponent = () => {
 
             <div class="debug-item">
               <h3>Metadata</h3>
-              <pre>{JSON.stringify({
-                version: state.storageData.version,
-                installDate: state.storageData.installDate
-                  ? new Date(state.storageData.installDate).toISOString()
-                  : null,
-              }, null, 2)}</pre>
+              <pre>
+                {JSON.stringify(
+                  {
+                    version: state.storageData.version,
+                    installDate: state.storageData.installDate
+                      ? new Date(state.storageData.installDate).toISOString()
+                      : null,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
             </div>
           </div>
         )}
