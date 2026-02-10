@@ -2,36 +2,57 @@
  * Background service orchestrating browser events and time tracking
  */
 
-import type { 
-  ActiveSession,
+import type {
+  ActiveTab,
   ExtensionMessageUnion,
   MessageResponse,
   GetSessionStateMessage,
   SessionStateResponseMessage,
   SessionUpdateMessage,
   SettingsChangeMessage,
-  ErrorReportMessage
-} from '../../types';
-import { StorageManager } from './models/StorageManager';
-import { TimeTracker } from './services/TimeTracker';
+  ErrorReportMessage,
+  GetSettingsMessage,
+  UpdatePillPositionMessage,
+} from "../../types";
+import { DataModelManager } from "./services/DataModelManager";
+import { TimeTracker } from "./services/TimeTracker";
+import { HistoryRepository } from "./repositories/HistoryRepository";
+import { TabRepository } from "./repositories/TabRepository";
+import { SettingsRepository } from "./repositories/SettingsRepository";
 
 export class BackgroundService {
   private static instance: BackgroundService | null = null;
-  private storageManager: StorageManager;
+  private dataModelManager: DataModelManager;
   private timeTracker: TimeTracker;
+  private settingsRepository: SettingsRepository;
   private initialized = false;
 
-  private constructor(storageManager: StorageManager, timeTracker: TimeTracker) {
-    this.storageManager = storageManager;
+  private constructor(
+    dataModelManager: DataModelManager,
+    timeTracker: TimeTracker,
+    settingsRepository: SettingsRepository
+  ) {
+    this.dataModelManager = dataModelManager;
     this.timeTracker = timeTracker;
+    this.settingsRepository = settingsRepository;
   }
 
-  public static getInstance(storageManager?: StorageManager, timeTracker?: TimeTracker): BackgroundService {
+  public static getInstance(
+    dataModelManager?: DataModelManager,
+    timeTracker?: TimeTracker,
+    settingsRepository?: SettingsRepository
+  ): BackgroundService {
     if (!BackgroundService.instance) {
-      if (!storageManager || !timeTracker) {
-        throw new Error('StorageManager and TimeTracker are required for first initialization');
+      if (!dataModelManager || !timeTracker || !settingsRepository) {
+        throw new Error(
+          "DataModelManager, TimeTracker, and SettingsRepository are required for first initialization"
+        );
       }
-      BackgroundService.instance = new BackgroundService(storageManager, timeTracker);
+      BackgroundService.instance = new BackgroundService(
+        dataModelManager,
+        timeTracker,
+        settingsRepository
+      );
     }
     return BackgroundService.instance;
   }
@@ -49,8 +70,8 @@ export class BackgroundService {
         return;
       }
 
-      // Initialize storage
-      await this.storageManager.initialize();
+      // Initialize data model manager
+      await this.dataModelManager.initialize();
 
       // Register browser event listeners
       this.registerEventListeners();
@@ -59,9 +80,9 @@ export class BackgroundService {
       this.registerMessageListeners();
 
       this.initialized = true;
-      console.log('BackgroundService initialized successfully');
+      console.log("BackgroundService initialized successfully");
     } catch (error) {
-      console.error('BackgroundService.initialize error:', error);
+      console.error("BackgroundService.initialize error:", error);
       throw new Error(`Failed to initialize background service: ${error}`);
     }
   }
@@ -76,8 +97,8 @@ export class BackgroundService {
   /**
    * Get the current active session
    */
-  public async getCurrentSession(): Promise<ActiveSession | null> {
-    return this.storageManager.getActiveSession();
+  public getActiveTab(): ActiveTab | null {
+    return this.dataModelManager.getActiveTab();
   }
 
   /**
@@ -85,13 +106,13 @@ export class BackgroundService {
    */
   public async shutdown(): Promise<void> {
     try {
-      const activeSession = await this.storageManager.getActiveSession();
-      if (activeSession) {
+      const activeTab = this.dataModelManager.getActiveTab();
+      if (activeTab) {
         await this.timeTracker.stopSession();
       }
-      console.log('BackgroundService shutdown completed');
+      console.log("BackgroundService shutdown completed");
     } catch (error) {
-      console.error('BackgroundService.shutdown error:', error);
+      console.error("BackgroundService.shutdown error:", error);
     }
   }
 
@@ -111,32 +132,58 @@ export class BackgroundService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<boolean> {
     try {
-      console.log(`BackgroundService received message: ${message.type}`, message);
+      console.log(
+        `BackgroundService received message: ${message.type}`,
+        message
+      );
 
       switch (message.type) {
-        case 'GET_SESSION_STATE':
-          await this.handleGetSessionState(message as GetSessionStateMessage, sendResponse);
+        case "GET_SESSION_STATE":
+          await this.handleGetSessionState(
+            message as GetSessionStateMessage,
+            sendResponse
+          );
           break;
 
-        case 'ERROR_REPORT':
-          await this.handleErrorReport(message as ErrorReportMessage, sendResponse);
+        case "ERROR_REPORT":
+          await this.handleErrorReport(
+            message as ErrorReportMessage,
+            sendResponse
+          );
+          break;
+
+        case "GET_SETTINGS":
+          await this.handleGetSettings(
+            message as GetSettingsMessage,
+            sendResponse
+          );
+          break;
+
+        case "UPDATE_PILL_POSITION":
+          await this.handleUpdatePillPosition(
+            message as UpdatePillPositionMessage,
+            sendResponse
+          );
           break;
 
         default:
-          console.warn(`BackgroundService: Unhandled message type: ${message.type}`);
+          console.warn(
+            `BackgroundService: Unhandled message type: ${message.type}`
+          );
           sendResponse({
             success: false,
-            error: `Unhandled message type: ${message.type}`
+            error: `Unhandled message type: ${message.type}`,
           });
           break;
       }
 
       return true; // Keep message channel open for async response
     } catch (error) {
-      console.error('BackgroundService.handleMessage error:', error);
+      console.error("BackgroundService.handleMessage error:", error);
       sendResponse({
         success: false,
-        error: error instanceof Error ? error.message : 'Message handling failed'
+        error:
+          error instanceof Error ? error.message : "Message handling failed",
       });
       return true;
     }
@@ -150,35 +197,38 @@ export class BackgroundService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const activeSession = await this.storageManager.getActiveSession();
-      
-      if (!activeSession || activeSession.domain !== message.payload.domain) {
+      const activeTab = this.dataModelManager.getActiveTab();
+
+      if (!activeTab || activeTab.domain !== message.payload.domain) {
         sendResponse({
           success: true,
-          data: null
+          data: null,
         });
         return;
       }
 
-      const currentTime = this.timeTracker.getSessionDuration(activeSession);
-      
-      const responseData: SessionStateResponseMessage['payload'] = {
-        domain: activeSession.domain,
+      const currentTime = this.timeTracker.getCurrentDisplayTime();
+
+      const responseData: SessionStateResponseMessage["payload"] = {
+        domain: activeTab.domain,
         currentTime,
-        isActive: !activeSession.isPaused,
-        isPaused: activeSession.isPaused || false,
-        startTime: activeSession.startTime
+        isActive: activeTab.active,
+        isPaused: !activeTab.active,
+        startTime: activeTab.lastActivated,
       };
 
       sendResponse({
         success: true,
-        data: responseData
+        data: responseData,
       });
     } catch (error) {
-      console.error('BackgroundService.handleGetSessionState error:', error);
+      console.error("BackgroundService.handleGetSessionState error:", error);
       sendResponse({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to get session state'
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get session state",
       });
     }
   }
@@ -193,15 +243,65 @@ export class BackgroundService {
     try {
       console.error(`Content script error [${message.payload.context}]:`, {
         error: message.payload.error,
-        stackTrace: message.payload.stackTrace
+        stackTrace: message.payload.stackTrace,
       });
 
       sendResponse({ success: true });
     } catch (error) {
-      console.error('BackgroundService.handleErrorReport error:', error);
+      console.error("BackgroundService.handleErrorReport error:", error);
       sendResponse({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to handle error report'
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to handle error report",
+      });
+    }
+  }
+
+  /**
+   * Handle settings requests from content scripts
+   */
+  private async handleGetSettings(
+    _message: GetSettingsMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      const settings = await this.settingsRepository.getSettings();
+      sendResponse({
+        success: true,
+        data: settings,
+      });
+    } catch (error) {
+      console.error("BackgroundService.handleGetSettings error:", error);
+      sendResponse({
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to get settings",
+      });
+    }
+  }
+
+  /**
+   * Handle pill position updates from content scripts
+   */
+  private async handleUpdatePillPosition(
+    message: UpdatePillPositionMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      await this.settingsRepository.updateSettings({
+        pillPosition: message.payload.position,
+      });
+      sendResponse({ success: true });
+    } catch (error) {
+      console.error("BackgroundService.handleUpdatePillPosition error:", error);
+      sendResponse({
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update pill position",
       });
     }
   }
@@ -209,32 +309,43 @@ export class BackgroundService {
   /**
    * Send session update to a specific tab
    */
-  private async sendSessionUpdate(session: ActiveSession): Promise<void> {
+  private async sendSessionUpdate(activeTab: ActiveTab): Promise<void> {
     try {
-      const currentTime = this.timeTracker.getSessionDuration(session);
+      const currentTime = this.timeTracker.getCurrentDisplayTime();
 
       const updateMessage: SessionUpdateMessage = {
-        type: 'SESSION_UPDATE',
+        type: "SESSION_UPDATE",
         payload: {
-          domain: session.domain,
+          domain: activeTab.domain,
           currentTime,
-          isActive: !session.isPaused,
-          isPaused: session.isPaused || false,
-          startTime: session.startTime
+          isActive: activeTab.active,
+          isPaused: !activeTab.active,
+          startTime: activeTab.lastActivated,
         },
         id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
 
-      // Send only to the session's tab
-      try {
-        await browser.tabs.sendMessage(session.tabId, updateMessage);
-      } catch (error) {
-        // Content script may not be loaded on this tab - this is normal
-        console.debug(`Failed to send message to tab ${session.tabId}:`, error);
+      // Send to all tabs with matching domain
+      const tabs = await browser.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id && tab.url) {
+          const domain = this.timeTracker.extractDomain(tab.url);
+          if (domain === activeTab.domain) {
+            try {
+              await browser.tabs.sendMessage(tab.id, updateMessage);
+            } catch (error) {
+              // Content script may not be loaded on this tab - this is normal
+              console.debug(
+                `Failed to send message to tab ${tab.id}:`,
+                error
+              );
+            }
+          }
+        }
       }
     } catch (error) {
-      console.error('BackgroundService.sendSessionUpdate error:', error);
+      console.error("BackgroundService.sendSessionUpdate error:", error);
     }
   }
 
@@ -245,27 +356,27 @@ export class BackgroundService {
   // @ts-expect-error Method will be used when popup settings are implemented
   private async broadcastSettingsChange(): Promise<void> {
     try {
-      const settings = await this.storageManager.getSettings();
-      
-      const settingsMessage: Omit<SettingsChangeMessage, 'id' | 'timestamp'> = {
-        type: 'SETTINGS_CHANGE',
+      const settings = await this.settingsRepository.getSettings();
+
+      const settingsMessage: Omit<SettingsChangeMessage, "id" | "timestamp"> = {
+        type: "SETTINGS_CHANGE",
         payload: {
           pillPosition: settings.pillPosition,
           pillVisibility: settings.pillVisibility,
-          excludedDomains: settings.excludedDomains
-        }
+          excludedDomains: settings.excludedDomains,
+        },
       };
 
       // Get all tabs to broadcast to
       const tabs = await browser.tabs.query({});
-      
+
       for (const tab of tabs) {
         if (tab.id && tab.url && this.isValidUrl(tab.url)) {
           try {
             await browser.tabs.sendMessage(tab.id, {
               ...settingsMessage,
               id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-              timestamp: Date.now()
+              timestamp: Date.now(),
             });
           } catch (error) {
             // Content script may not be loaded on this tab - this is normal
@@ -274,7 +385,7 @@ export class BackgroundService {
         }
       }
     } catch (error) {
-      console.error('BackgroundService.broadcastSettingsChange error:', error);
+      console.error("BackgroundService.broadcastSettingsChange error:", error);
     }
   }
 
@@ -289,45 +400,56 @@ export class BackgroundService {
     browser.tabs.onUpdated.addListener(this.handleTabUpdated.bind(this));
 
     // Window focus change event
-    browser.windows.onFocusChanged.addListener(this.handleWindowFocusChanged.bind(this));
+    browser.windows.onFocusChanged.addListener(
+      this.handleWindowFocusChanged.bind(this)
+    );
 
     // Page navigation completion event
-    browser.webNavigation.onCompleted.addListener(this.handleNavigationCompleted.bind(this));
+    browser.webNavigation.onCompleted.addListener(
+      this.handleNavigationCompleted.bind(this)
+    );
   }
 
   /**
    * Handle tab activation events
    */
-  private async handleTabActivated(activeInfo: { tabId: number; windowId: number }): Promise<void> {
+  private async handleTabActivated(activeInfo: {
+    tabId: number;
+    windowId: number;
+  }): Promise<void> {
     try {
       const tab = await browser.tabs.get(activeInfo.tabId);
-      
+
       if (!tab.url || !this.isValidUrl(tab.url)) {
         return;
       }
 
       const domain = this.timeTracker.extractDomain(tab.url);
-      
+
       // Check if domain is excluded
       if (await this.isDomainExcluded(domain)) {
         return;
       }
 
       // Stop current session if active
-      const activeSession = await this.storageManager.getActiveSession();
-      if (activeSession) {
+      const activeTab = this.dataModelManager.getActiveTab();
+      if (activeTab) {
         await this.timeTracker.stopSession();
       }
 
       // Start new session for the activated tab
-      const newSession = await this.timeTracker.startSession(domain, activeInfo.tabId, activeInfo.windowId);
-      
+      const newActiveTab = await this.timeTracker.startSession(
+        domain,
+        activeInfo.tabId,
+        activeInfo.windowId
+      );
+
       // Broadcast session update to content scripts
-      await this.sendSessionUpdate(newSession);
-      
+      await this.sendSessionUpdate(newActiveTab);
+
       console.log(`Started tracking session for domain: ${domain}`);
     } catch (error) {
-      console.error('BackgroundService.handleTabActivated error:', error);
+      console.error("BackgroundService.handleTabActivated error:", error);
       // Continue operation despite errors
     }
   }
@@ -351,27 +473,31 @@ export class BackgroundService {
       }
 
       const domain = this.timeTracker.extractDomain(changeInfo.url);
-      
+
       // Check if domain is excluded
       if (await this.isDomainExcluded(domain)) {
         return;
       }
 
       // Stop current session if active
-      const activeSession = await this.storageManager.getActiveSession();
-      if (activeSession) {
+      const activeTab = this.dataModelManager.getActiveTab();
+      if (activeTab) {
         await this.timeTracker.stopSession();
       }
 
       // Start new session for the updated URL
-      const newSession = await this.timeTracker.startSession(domain, tabId, tab.windowId!);
-      
+      const newActiveTab = await this.timeTracker.startSession(
+        domain,
+        tabId,
+        tab.windowId!
+      );
+
       // Broadcast session update to content scripts
-      await this.sendSessionUpdate(newSession);
-      
+      await this.sendSessionUpdate(newActiveTab);
+
       console.log(`URL changed - started tracking session for domain: ${domain}`);
     } catch (error) {
-      console.error('BackgroundService.handleTabUpdated error:', error);
+      console.error("BackgroundService.handleTabUpdated error:", error);
       // Continue operation despite errors
     }
   }
@@ -381,31 +507,31 @@ export class BackgroundService {
    */
   private async handleWindowFocusChanged(windowId: number): Promise<void> {
     try {
-      const activeSession = await this.storageManager.getActiveSession();
-      
-      if (!activeSession) {
+      const activeTab = this.dataModelManager.getActiveTab();
+
+      if (!activeTab) {
         return;
       }
 
       if (windowId === browser.windows.WINDOW_ID_NONE) {
         // Window lost focus - pause tracking
-        const pausedSession = await this.timeTracker.pauseSession();
-        if (pausedSession) {
-          await this.sendSessionUpdate(pausedSession);
+        const pausedTab = await this.timeTracker.pauseSession();
+        if (pausedTab) {
+          await this.sendSessionUpdate(pausedTab);
         }
-        console.log('Window lost focus - paused tracking');
+        console.log("Window lost focus - paused tracking");
       } else {
         // Window gained focus - resume tracking if paused
-        if (activeSession.isPaused) {
-          const resumedSession = await this.timeTracker.resumeSession();
-          if (resumedSession) {
-            await this.sendSessionUpdate(resumedSession);
+        if (!activeTab.active) {
+          const resumedTab = await this.timeTracker.resumeSession();
+          if (resumedTab) {
+            await this.sendSessionUpdate(resumedTab);
           }
-          console.log('Window gained focus - resumed tracking');
+          console.log("Window gained focus - resumed tracking");
         }
       }
     } catch (error) {
-      console.error('BackgroundService.handleWindowFocusChanged error:', error);
+      console.error("BackgroundService.handleWindowFocusChanged error:", error);
       // Continue operation despite errors
     }
   }
@@ -430,34 +556,40 @@ export class BackgroundService {
 
       // Get tab information
       const tab = await browser.tabs.get(details.tabId);
-      
+
       // Only process active tabs
       if (!tab.active) {
         return;
       }
 
       const domain = this.timeTracker.extractDomain(details.url);
-      
+
       // Check if domain is excluded
       if (await this.isDomainExcluded(domain)) {
         return;
       }
 
       // Stop current session if active
-      const activeSession = await this.storageManager.getActiveSession();
-      if (activeSession) {
+      const activeTab = this.dataModelManager.getActiveTab();
+      if (activeTab) {
         await this.timeTracker.stopSession();
       }
 
       // Start new session for the completed navigation
-      const newSession = await this.timeTracker.startSession(domain, details.tabId, tab.windowId!);
-      
+      const newActiveTab = await this.timeTracker.startSession(
+        domain,
+        details.tabId,
+        tab.windowId!
+      );
+
       // Broadcast session update to content scripts
-      await this.sendSessionUpdate(newSession);
-      
-      console.log(`Navigation completed - started tracking session for domain: ${domain}`);
+      await this.sendSessionUpdate(newActiveTab);
+
+      console.log(
+        `Navigation completed - started tracking session for domain: ${domain}`
+      );
     } catch (error) {
-      console.error('BackgroundService.handleNavigationCompleted error:', error);
+      console.error("BackgroundService.handleNavigationCompleted error:", error);
       // Continue operation despite errors
     }
   }
@@ -466,16 +598,16 @@ export class BackgroundService {
    * Check if a URL is valid for tracking
    */
   private isValidUrl(url: string): boolean {
-    if (!url || typeof url !== 'string') {
+    if (!url || typeof url !== "string") {
       return false;
     }
 
     try {
       const parsedUrl = new URL(url);
       const protocol = parsedUrl.protocol;
-      
+
       // Only track http and https URLs
-      return protocol === 'http:' || protocol === 'https:';
+      return protocol === "http:" || protocol === "https:";
     } catch {
       return false;
     }
@@ -486,10 +618,9 @@ export class BackgroundService {
    */
   private async isDomainExcluded(domain: string): Promise<boolean> {
     try {
-      const settings = await this.storageManager.getSettings();
-      return settings.excludedDomains.includes(domain);
+      return await this.settingsRepository.isDomainExcluded(domain);
     } catch (error) {
-      console.error('BackgroundService.isDomainExcluded error:', error);
+      console.error("BackgroundService.isDomainExcluded error:", error);
       return false; // Default to not excluded if settings can't be loaded
     }
   }
@@ -502,12 +633,33 @@ export class BackgroundService {
  */
 (async function bootstrap(): Promise<void> {
   try {
-    const storageManager = StorageManager.getInstance(browser.storage.local);
-    const timeTracker = TimeTracker.getInstance(storageManager);
-    const backgroundService = BackgroundService.getInstance(storageManager, timeTracker);
+    const storage = browser.storage.local;
+
+    // Initialize repositories
+    const historyRepository = HistoryRepository.getInstance(storage);
+    const tabRepository = TabRepository.getInstance(storage);
+    const settingsRepository = SettingsRepository.getInstance(storage);
+
+    // Initialize DataModelManager
+    const dataModelManager = DataModelManager.getInstance(
+      historyRepository,
+      tabRepository,
+      settingsRepository
+    );
+
+    // Initialize TimeTracker
+    const timeTracker = TimeTracker.getInstance(dataModelManager);
+
+    // Initialize BackgroundService
+    const backgroundService = BackgroundService.getInstance(
+      dataModelManager,
+      timeTracker,
+      settingsRepository
+    );
+
     await backgroundService.initialize();
-    console.log('Web Time Tracker background service started');
+    console.log("Web Time Tracker background service started");
   } catch (error) {
-    console.error('Failed to bootstrap background service:', error);
+    console.error("Failed to bootstrap background service:", error);
   }
 })();

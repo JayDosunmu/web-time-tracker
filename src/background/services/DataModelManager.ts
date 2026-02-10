@@ -1,0 +1,489 @@
+/**
+ * DataModelManager - Business logic layer for time tracking data
+ *
+ * Manages the data model lifecycle, including:
+ * - ActiveTab state management (in-memory)
+ * - Lifecycle event handling (TabEnter, TabExit, HourElapsed, DayElapsed)
+ * - History/Day/Hour aggregations
+ * - Hour/day boundary detection
+ *
+ * Coordinates with repositories for persistence while keeping
+ * domain-specific logic separate from storage operations.
+ */
+
+import type {
+  ActiveTab,
+  Day,
+  LifecycleEventContext,
+} from "../../../types";
+import { HistoryRepository } from "../repositories/HistoryRepository";
+import type { TabRepository } from "../repositories/TabRepository";
+import type { SettingsRepository } from "../repositories/SettingsRepository";
+
+export class DataModelManager {
+  private static instance: DataModelManager | null = null;
+
+  private historyRepository: HistoryRepository;
+  private tabRepository: TabRepository;
+  private settingsRepository: SettingsRepository;
+
+  // In-memory active tab state for fast access
+  private activeTab: ActiveTab | null = null;
+
+  // Boundary detection timers
+  private hourBoundaryTimer: ReturnType<typeof setTimeout> | null = null;
+  private dayBoundaryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private constructor(
+    historyRepository: HistoryRepository,
+    tabRepository: TabRepository,
+    settingsRepository: SettingsRepository
+  ) {
+    this.historyRepository = historyRepository;
+    this.tabRepository = tabRepository;
+    this.settingsRepository = settingsRepository;
+  }
+
+  public static getInstance(
+    historyRepository?: HistoryRepository,
+    tabRepository?: TabRepository,
+    settingsRepository?: SettingsRepository
+  ): DataModelManager {
+    if (!DataModelManager.instance) {
+      if (!historyRepository || !tabRepository || !settingsRepository) {
+        throw new Error(
+          "DataModelManager must be initialized with all repositories on first call"
+        );
+      }
+      DataModelManager.instance = new DataModelManager(
+        historyRepository,
+        tabRepository,
+        settingsRepository
+      );
+    }
+    return DataModelManager.instance;
+  }
+
+  public static resetInstance(): void {
+    if (DataModelManager.instance) {
+      DataModelManager.instance.cleanup();
+    }
+    DataModelManager.instance = null;
+  }
+
+  /**
+   * Initialize the data model manager
+   * Restores active tab state from storage and sets up boundary detection
+   */
+  async initialize(): Promise<void> {
+    try {
+      // Restore active tab state from storage
+      this.activeTab = await this.tabRepository.getActiveTab();
+
+      // If there was an active tab, update lastTimerCheck to now
+      if (this.activeTab) {
+        this.activeTab.lastTimerCheck = Date.now();
+        await this.tabRepository.setActiveTab(this.activeTab);
+      }
+
+      // Setup boundary detection timers
+      this.setupHourBoundaryDetection();
+      this.setupDayBoundaryDetection();
+
+      // Clear expired days based on retention settings
+      await this.clearExpiredDays();
+
+      console.log("DataModelManager initialized successfully");
+    } catch (error) {
+      console.error("DataModelManager.initialize error:", error);
+      throw new Error(`Failed to initialize DataModelManager: ${error}`);
+    }
+  }
+
+  /**
+   * Handle tab enter event - called when user navigates to a new domain
+   */
+  async handleTabEnter(context: LifecycleEventContext): Promise<ActiveTab> {
+    const { domain, timestamp } = context;
+
+    try {
+      // First, handle any existing active tab exit
+      if (this.activeTab && this.activeTab.domain !== domain) {
+        await this.handleTabExit();
+      }
+
+      // Get or create today's day record
+      const today = await this.getOrCreateToday();
+      const existingDomainData = today.domains[domain];
+
+      // Calculate accumulated time for this domain today
+      const accumulatedTime = existingDomainData?.totalTime ?? 0;
+
+      // Create new active tab state
+      this.activeTab = {
+        domain,
+        totalTime: accumulatedTime,
+        active: true,
+        lastActivated: timestamp,
+        lastTimerCheck: timestamp,
+      };
+
+      // Persist to storage
+      await this.tabRepository.setActiveTab(this.activeTab);
+
+      // Update domain activation count in today's record
+      await this.incrementDomainActivation(domain, timestamp);
+
+      console.log(`Tab entered: ${domain}, accumulated time: ${accumulatedTime}ms`);
+
+      return this.activeTab;
+    } catch (error) {
+      console.error("DataModelManager.handleTabEnter error:", error);
+      throw new Error(`Failed to handle tab enter: ${error}`);
+    }
+  }
+
+  /**
+   * Handle tab exit event - called when user leaves the current domain
+   */
+  async handleTabExit(): Promise<void> {
+    if (!this.activeTab) {
+      return;
+    }
+
+    try {
+      const now = Date.now();
+      const elapsed = now - this.activeTab.lastTimerCheck;
+
+      // Update time records
+      await this.recordElapsedTime(elapsed, now);
+
+      // Clear active tab
+      this.activeTab = null;
+      await this.tabRepository.setActiveTab(null);
+
+      console.log("Tab exited");
+    } catch (error) {
+      console.error("DataModelManager.handleTabExit error:", error);
+      throw new Error(`Failed to handle tab exit: ${error}`);
+    }
+  }
+
+  /**
+   * Handle hour elapsed event - called when crossing an hour boundary
+   */
+  async handleHourElapsed(): Promise<void> {
+    if (!this.activeTab || !this.activeTab.active) {
+      return;
+    }
+
+    try {
+      const now = Date.now();
+      const elapsed = now - this.activeTab.lastTimerCheck;
+
+      // Record time up to the hour boundary
+      await this.recordElapsedTime(elapsed, now);
+
+      // Update the timer checkpoint
+      this.activeTab.lastTimerCheck = now;
+      await this.tabRepository.setActiveTab(this.activeTab);
+
+      console.log("Hour boundary crossed, time recorded");
+
+      // Reset hour boundary timer
+      this.setupHourBoundaryDetection();
+    } catch (error) {
+      console.error("DataModelManager.handleHourElapsed error:", error);
+    }
+  }
+
+  /**
+   * Handle day elapsed event - called when crossing a day boundary
+   */
+  async handleDayElapsed(): Promise<void> {
+    if (!this.activeTab || !this.activeTab.active) {
+      return;
+    }
+
+    try {
+      const now = Date.now();
+      const elapsed = now - this.activeTab.lastTimerCheck;
+
+      // Record remaining time to yesterday
+      await this.recordElapsedTime(elapsed, this.activeTab.lastTimerCheck);
+
+      // Reset accumulated time for the new day
+      this.activeTab.totalTime = 0;
+      this.activeTab.lastTimerCheck = now;
+      this.activeTab.lastActivated = now;
+      await this.tabRepository.setActiveTab(this.activeTab);
+
+      // Clear expired days
+      await this.clearExpiredDays();
+
+      console.log("Day boundary crossed, new day started");
+
+      // Reset boundary timers
+      this.setupDayBoundaryDetection();
+      this.setupHourBoundaryDetection();
+    } catch (error) {
+      console.error("DataModelManager.handleDayElapsed error:", error);
+    }
+  }
+
+  /**
+   * Pause the current session
+   */
+  async pauseSession(): Promise<ActiveTab | null> {
+    if (!this.activeTab) {
+      return null;
+    }
+
+    try {
+      const now = Date.now();
+      const elapsed = now - this.activeTab.lastTimerCheck;
+
+      // Record elapsed time before pausing
+      await this.recordElapsedTime(elapsed, now);
+
+      // Mark as inactive
+      this.activeTab.active = false;
+      this.activeTab.lastTimerCheck = now;
+      await this.tabRepository.setActiveTab(this.activeTab);
+
+      console.log(`Session paused for ${this.activeTab.domain}`);
+      return this.activeTab;
+    } catch (error) {
+      console.error("DataModelManager.pauseSession error:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Resume the current session
+   */
+  async resumeSession(): Promise<ActiveTab | null> {
+    if (!this.activeTab) {
+      return null;
+    }
+
+    try {
+      const now = Date.now();
+
+      // Mark as active and update checkpoint
+      this.activeTab.active = true;
+      this.activeTab.lastTimerCheck = now;
+      await this.tabRepository.setActiveTab(this.activeTab);
+
+      console.log(`Session resumed for ${this.activeTab.domain}`);
+      return this.activeTab;
+    } catch (error) {
+      console.error("DataModelManager.resumeSession error:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the current display time for the active tab
+   * Returns totalTime + time since lastTimerCheck if active
+   */
+  getCurrentDisplayTime(): number {
+    if (!this.activeTab) {
+      return 0;
+    }
+
+    if (!this.activeTab.active) {
+      return this.activeTab.totalTime;
+    }
+
+    const now = Date.now();
+    const elapsed = now - this.activeTab.lastTimerCheck;
+    return this.activeTab.totalTime + elapsed;
+  }
+
+  /**
+   * Get the current active tab state
+   */
+  getActiveTab(): ActiveTab | null {
+    return this.activeTab;
+  }
+
+  /**
+   * Check if a domain is excluded from tracking
+   */
+  async isDomainExcluded(domain: string): Promise<boolean> {
+    return this.settingsRepository.isDomainExcluded(domain);
+  }
+
+  /**
+   * Clear expired days based on retention settings
+   */
+  private async clearExpiredDays(): Promise<void> {
+    try {
+      const settings = await this.settingsRepository.getSettings();
+      const deletedCount = await this.historyRepository.clearExpiredDays(
+        settings.dataRetentionDays
+      );
+      if (deletedCount > 0) {
+        console.log(`Cleared ${deletedCount} expired days`);
+      }
+    } catch (error) {
+      console.error("DataModelManager.clearExpiredDays error:", error);
+    }
+  }
+
+  /**
+   * Get or create today's day record
+   */
+  private async getOrCreateToday(): Promise<Day> {
+    const now = Date.now();
+    const dateKey = HistoryRepository.getDateKey(now);
+    let today = await this.historyRepository.getDay(dateKey);
+
+    if (!today) {
+      const midnightTimestamp = HistoryRepository.getMidnightTimestamp(now);
+      today = this.historyRepository.createEmptyDay(midnightTimestamp);
+      await this.historyRepository.setDay(dateKey, today);
+    }
+
+    return today;
+  }
+
+  /**
+   * Record elapsed time to the appropriate hour and day
+   */
+  private async recordElapsedTime(elapsed: number, timestamp: number): Promise<void> {
+    if (elapsed <= 0 || !this.activeTab) {
+      return;
+    }
+
+    const domain = this.activeTab.domain;
+    const dateKey = HistoryRepository.getDateKey(timestamp);
+    const hour = new Date(timestamp).getHours();
+
+    // Get or create today's record
+    let today = await this.historyRepository.getDay(dateKey);
+    if (!today) {
+      const midnightTimestamp = HistoryRepository.getMidnightTimestamp(timestamp);
+      today = this.historyRepository.createEmptyDay(midnightTimestamp);
+    }
+
+    // Update day total
+    today.totalTime += elapsed;
+
+    // Update hour data
+    if (!today.hours[hour]) {
+      today.hours[hour] = { domains: {} };
+    }
+    if (!today.hours[hour].domains[domain]) {
+      today.hours[hour].domains[domain] = { totalTime: 0, activationsCount: 0 };
+    }
+    today.hours[hour].domains[domain].totalTime += elapsed;
+
+    // Update domain day data
+    if (!today.domains[domain]) {
+      today.domains[domain] = {
+        totalTime: 0,
+        activationsCount: 0,
+        lastActivated: timestamp,
+        lastTimerCheck: timestamp,
+      };
+    }
+    today.domains[domain].totalTime += elapsed;
+    today.domains[domain].lastTimerCheck = timestamp;
+
+    // Persist changes
+    await this.historyRepository.setDay(dateKey, today);
+
+    // Update in-memory active tab
+    if (this.activeTab) {
+      this.activeTab.totalTime += elapsed;
+      this.activeTab.lastTimerCheck = timestamp;
+    }
+  }
+
+  /**
+   * Increment domain activation count
+   */
+  private async incrementDomainActivation(domain: string, timestamp: number): Promise<void> {
+    const dateKey = HistoryRepository.getDateKey(timestamp);
+    const hour = new Date(timestamp).getHours();
+
+    let today = await this.historyRepository.getDay(dateKey);
+    if (!today) {
+      return;
+    }
+
+    // Increment hour activation count
+    if (today.hours[hour]?.domains[domain]) {
+      today.hours[hour].domains[domain].activationsCount++;
+    }
+
+    // Increment day activation count
+    if (today.domains[domain]) {
+      today.domains[domain].activationsCount++;
+      today.domains[domain].lastActivated = timestamp;
+    } else {
+      today.domains[domain] = {
+        totalTime: 0,
+        activationsCount: 1,
+        lastActivated: timestamp,
+        lastTimerCheck: timestamp,
+      };
+    }
+
+    await this.historyRepository.setDay(dateKey, today);
+  }
+
+  /**
+   * Setup hour boundary detection timer
+   */
+  private setupHourBoundaryDetection(): void {
+    if (this.hourBoundaryTimer) {
+      clearTimeout(this.hourBoundaryTimer);
+    }
+
+    const now = new Date();
+    const msUntilNextHour =
+      (60 - now.getMinutes()) * 60 * 1000 -
+      now.getSeconds() * 1000 -
+      now.getMilliseconds();
+
+    this.hourBoundaryTimer = setTimeout(() => {
+      this.handleHourElapsed();
+    }, msUntilNextHour);
+  }
+
+  /**
+   * Setup day boundary detection timer
+   */
+  private setupDayBoundaryDetection(): void {
+    if (this.dayBoundaryTimer) {
+      clearTimeout(this.dayBoundaryTimer);
+    }
+
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+
+    this.dayBoundaryTimer = setTimeout(() => {
+      this.handleDayElapsed();
+    }, msUntilMidnight);
+  }
+
+  /**
+   * Cleanup timers and resources
+   */
+  private cleanup(): void {
+    if (this.hourBoundaryTimer) {
+      clearTimeout(this.hourBoundaryTimer);
+      this.hourBoundaryTimer = null;
+    }
+    if (this.dayBoundaryTimer) {
+      clearTimeout(this.dayBoundaryTimer);
+      this.dayBoundaryTimer = null;
+    }
+  }
+}

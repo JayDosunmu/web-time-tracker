@@ -2,19 +2,21 @@
  * Comprehensive tests for background service and browser event integration
  */
 
-import browser from 'sinon-chrome';
+import browser from "sinon-chrome";
 
-import { BackgroundService } from './background';
-import { testUtils } from '../../tests/utils';
-import { mockActiveSession, mockExtensionSettings } from '../../tests/fixtures';
+import { BackgroundService } from "./background";
+import { testUtils } from "../../tests/utils";
 
-import type { StorageManager } from './models/StorageManager';
-import type { TimeTracker } from './services/TimeTracker';
+import type { DataModelManager } from "./services/DataModelManager";
+import type { TimeTracker } from "./services/TimeTracker";
+import type { SettingsRepository } from "./repositories/SettingsRepository";
+import type { ActiveTab, ExtensionSettings } from "../../types";
 
-describe('BackgroundService', () => {
+describe("BackgroundService", () => {
   let backgroundService: BackgroundService;
-  let mockStorageManager: jest.Mocked<StorageManager>;
+  let mockDataModelManager: jest.Mocked<DataModelManager>;
   let mockTimeTracker: jest.Mocked<TimeTracker>;
+  let mockSettingsRepository: jest.Mocked<SettingsRepository>;
 
   // Event handler capture variables
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,18 +28,35 @@ describe('BackgroundService', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let webNavHandler: any;
 
+  const mockActiveTab: ActiveTab = {
+    domain: "example.com",
+    totalTime: 5000,
+    active: true,
+    lastActivated: 1640995200000,
+    lastTimerCheck: 1640995200000,
+  };
+
+  const mockExtensionSettings: ExtensionSettings = {
+    pillPosition: { x: 100, y: 100 },
+    pillVisibility: true,
+    dataRetentionDays: 30,
+    excludedDomains: [],
+  };
+
   beforeEach(() => {
     testUtils.resetAll();
 
-    // Create mock StorageManager
-    mockStorageManager = {
-      getActiveSession: jest.fn(),
-      setActiveSession: jest.fn(),
-      getDomainData: jest.fn(),
-      updateDomainData: jest.fn(),
-      getSettings: jest.fn(),
-      initialize: jest.fn()
-    } as unknown as jest.Mocked<StorageManager>;
+    // Create mock DataModelManager
+    mockDataModelManager = {
+      initialize: jest.fn(),
+      handleTabEnter: jest.fn(),
+      handleTabExit: jest.fn(),
+      pauseSession: jest.fn(),
+      resumeSession: jest.fn(),
+      getActiveTab: jest.fn(),
+      getCurrentDisplayTime: jest.fn(),
+      isDomainExcluded: jest.fn(),
+    } as unknown as jest.Mocked<DataModelManager>;
 
     // Create mock TimeTracker
     mockTimeTracker = {
@@ -45,62 +64,90 @@ describe('BackgroundService', () => {
       stopSession: jest.fn(),
       pauseSession: jest.fn(),
       resumeSession: jest.fn(),
-      getCurrentSession: jest.fn(),
+      getActiveTab: jest.fn(),
       extractDomain: jest.fn(),
-      getSessionDuration: jest.fn()
+      getSessionDuration: jest.fn(),
+      getCurrentDisplayTime: jest.fn(),
     } as unknown as jest.Mocked<TimeTracker>;
 
+    // Create mock SettingsRepository
+    mockSettingsRepository = {
+      getSettings: jest.fn(),
+      updateSettings: jest.fn(),
+      setSettings: jest.fn(),
+      getDefaultSettings: jest.fn(),
+      isDomainExcluded: jest.fn(),
+    } as unknown as jest.Mocked<SettingsRepository>;
+
     // Set up event handler capture using Jest mocks
-    (browser.tabs.onActivated.addListener as unknown as jest.Mock).mockImplementation((handler) => {
+    (
+      browser.tabs.onActivated.addListener as unknown as jest.Mock
+    ).mockImplementation((handler) => {
       tabActivatedHandler = handler;
     });
-    (browser.tabs.onUpdated.addListener as unknown as jest.Mock).mockImplementation((handler) => {
+    (
+      browser.tabs.onUpdated.addListener as unknown as jest.Mock
+    ).mockImplementation((handler) => {
       tabUpdatedHandler = handler;
     });
-    (browser.windows.onFocusChanged.addListener as unknown as jest.Mock).mockImplementation((handler) => {
+    (
+      browser.windows.onFocusChanged.addListener as unknown as jest.Mock
+    ).mockImplementation((handler) => {
       windowFocusHandler = handler;
     });
-    (browser.webNavigation.onCompleted.addListener as unknown as jest.Mock).mockImplementation((handler) => {
+    (
+      browser.webNavigation.onCompleted.addListener as unknown as jest.Mock
+    ).mockImplementation((handler) => {
       webNavHandler = handler;
     });
 
     // Reset and create BackgroundService with mocks
     BackgroundService.resetInstance();
-    backgroundService = BackgroundService.getInstance(mockStorageManager, mockTimeTracker);
+    backgroundService = BackgroundService.getInstance(
+      mockDataModelManager,
+      mockTimeTracker,
+      mockSettingsRepository
+    );
 
     // Set up default mock behaviors
-    mockStorageManager.getSettings.mockResolvedValue(mockExtensionSettings);
-    mockStorageManager.getActiveSession.mockResolvedValue(null);
-    mockTimeTracker.extractDomain.mockReturnValue('example.com');
+    mockSettingsRepository.getSettings.mockResolvedValue(mockExtensionSettings);
+    mockSettingsRepository.isDomainExcluded.mockResolvedValue(false);
+    mockDataModelManager.getActiveTab.mockReturnValue(null);
+    mockDataModelManager.initialize.mockResolvedValue();
+    mockTimeTracker.extractDomain.mockReturnValue("example.com");
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  describe('Singleton Pattern', () => {
-    it('should return the same instance', () => {
+  describe("Singleton Pattern", () => {
+    it("should return the same instance", () => {
       const instance1 = BackgroundService.getInstance();
       const instance2 = BackgroundService.getInstance();
       expect(instance1).toBe(instance2);
     });
 
-    it('should reset instance for testing', () => {
+    it("should reset instance for testing", () => {
       const instance1 = BackgroundService.getInstance();
       BackgroundService.resetInstance();
-      const instance2 = BackgroundService.getInstance(mockStorageManager, mockTimeTracker);
+      const instance2 = BackgroundService.getInstance(
+        mockDataModelManager,
+        mockTimeTracker,
+        mockSettingsRepository
+      );
       expect(instance1).not.toBe(instance2);
     });
   });
 
-  describe('Service Initialization', () => {
-    it('should initialize storage on startup', async () => {
+  describe("Service Initialization", () => {
+    it("should initialize data model manager on startup", async () => {
       await backgroundService.initialize();
 
-      expect(mockStorageManager.initialize).toHaveBeenCalled();
+      expect(mockDataModelManager.initialize).toHaveBeenCalled();
     });
 
-    it('should register all browser event listeners on startup', async () => {
+    it("should register all browser event listeners on startup", async () => {
       await backgroundService.initialize();
 
       // Verify tab event listeners are registered using Jest assertions
@@ -114,100 +161,124 @@ describe('BackgroundService', () => {
       expect(browser.webNavigation.onCompleted.addListener).toHaveBeenCalled();
     });
 
-    it('should handle initialization errors gracefully', async () => {
-      mockStorageManager.initialize.mockRejectedValue(new Error('Storage init failed'));
+    it("should handle initialization errors gracefully", async () => {
+      mockDataModelManager.initialize.mockRejectedValue(
+        new Error("Init failed")
+      );
 
-      await expect(backgroundService.initialize())
-        .rejects.toThrow('Failed to initialize background service: Error: Storage init failed');
+      await expect(backgroundService.initialize()).rejects.toThrow(
+        "Failed to initialize background service: Error: Init failed"
+      );
     });
 
-    it('should not reinitialize if already initialized', async () => {
+    it("should not reinitialize if already initialized", async () => {
       await backgroundService.initialize();
       await backgroundService.initialize();
 
       // Should only be called once
-      expect(mockStorageManager.initialize).toHaveBeenCalledTimes(1);
+      expect(mockDataModelManager.initialize).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('Tab Event Handling', () => {
+  describe("Tab Event Handling", () => {
     beforeEach(async () => {
       await backgroundService.initialize();
     });
 
-    it('should start tracking when tab becomes active', async () => {
+    it("should start tracking when tab becomes active", async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
-      const tabInfo = { id: 123, url: 'https://example.com/path', windowId: 1 };
+      const tabInfo = {
+        id: 123,
+        url: "https://example.com/path",
+        windowId: 1,
+      };
 
       // Mock browser.tabs.get to return tab info
       browser.tabs.get.resolves(tabInfo);
-      mockTimeTracker.startSession.mockResolvedValue(mockActiveSession);
+      mockTimeTracker.startSession.mockResolvedValue(mockActiveTab);
 
       // Use captured event handler
       await tabActivatedHandler(activeInfo);
 
       // Use sinon assertions for browser API calls
       expect(browser.tabs.get.calledWith(123)).toBe(true);
-      expect(mockTimeTracker.extractDomain).toHaveBeenCalledWith('https://example.com/path');
-      expect(mockTimeTracker.startSession).toHaveBeenCalledWith('example.com', 123, 1);
+      expect(mockTimeTracker.extractDomain).toHaveBeenCalledWith(
+        "https://example.com/path"
+      );
+      expect(mockTimeTracker.startSession).toHaveBeenCalledWith(
+        "example.com",
+        123,
+        1
+      );
     });
 
-    it('should stop current session before starting new one', async () => {
+    it("should stop current session before starting new one", async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
-      const tabInfo = { id: 123, url: 'https://example.com', windowId: 1 };
+      const tabInfo = { id: 123, url: "https://example.com", windowId: 1 };
 
       browser.tabs.get.resolves(tabInfo);
-      mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
-      mockTimeTracker.stopSession.mockResolvedValue({
-        startTime: 1000,
-        endTime: 2000,
-        duration: 1000,
-        tabId: mockActiveSession.tabId,
-        windowId: mockActiveSession.windowId
-      });
+      mockDataModelManager.getActiveTab.mockReturnValue(mockActiveTab);
+      mockTimeTracker.stopSession.mockResolvedValue();
+      mockTimeTracker.startSession.mockResolvedValue(mockActiveTab);
 
       await tabActivatedHandler(activeInfo);
 
       expect(mockTimeTracker.stopSession).toHaveBeenCalled();
-      expect(mockTimeTracker.startSession).toHaveBeenCalledWith('example.com', 123, 1);
+      expect(mockTimeTracker.startSession).toHaveBeenCalledWith(
+        "example.com",
+        123,
+        1
+      );
     });
 
-    it('should handle tab activation errors gracefully', async () => {
+    it("should handle tab activation errors gracefully", async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
 
-      browser.tabs.get.rejects(new Error('Tab not found'));
+      browser.tabs.get.rejects(new Error("Tab not found"));
 
       // Should not throw error
       await expect(tabActivatedHandler(activeInfo)).resolves.toBeUndefined();
       expect(mockTimeTracker.startSession).not.toHaveBeenCalled();
     });
 
-    it('should handle URL changes in active tab', async () => {
+    it("should handle URL changes in active tab", async () => {
       const tabId = 123;
-      const changeInfo = { url: 'https://newsite.com' };
-      const tab = { id: tabId, url: 'https://newsite.com', windowId: 1, active: true };
+      const changeInfo = { url: "https://newsite.com" };
+      const tab = {
+        id: tabId,
+        url: "https://newsite.com",
+        windowId: 1,
+        active: true,
+      };
 
       browser.tabs.get.resolves(tab);
-      mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
-      mockTimeTracker.extractDomain.mockReturnValue('newsite.com');
-      mockTimeTracker.stopSession.mockResolvedValue({
-        startTime: 1000,
-        endTime: 2000,
-        duration: 1000,
-        tabId: mockActiveSession.tabId,
-        windowId: mockActiveSession.windowId
+      mockDataModelManager.getActiveTab.mockReturnValue(mockActiveTab);
+      mockTimeTracker.extractDomain.mockReturnValue("newsite.com");
+      mockTimeTracker.stopSession.mockResolvedValue();
+      mockTimeTracker.startSession.mockResolvedValue({
+        ...mockActiveTab,
+        domain: "newsite.com",
       });
 
       await tabUpdatedHandler(tabId, changeInfo, tab);
 
       expect(mockTimeTracker.stopSession).toHaveBeenCalled();
-      expect(mockTimeTracker.startSession).toHaveBeenCalledWith('newsite.com', tabId, 1);
+      expect(mockTimeTracker.startSession).toHaveBeenCalledWith(
+        "newsite.com",
+        tabId,
+        1
+      );
     });
 
-    it('should ignore URL changes in inactive tabs', async () => {
+    it("should ignore URL changes in inactive tabs", async () => {
       const tabId = 123;
-      const changeInfo = { url: 'https://newsite.com' };
-      const tab = { id: tabId, url: 'https://newsite.com', windowId: 1, active: false };
+      const changeInfo = { url: "https://newsite.com" };
+      const tab = {
+        id: tabId,
+        url: "https://newsite.com",
+        windowId: 1,
+        active: false,
+      };
 
       browser.tabs.get.resolves(tab);
 
@@ -217,10 +288,15 @@ describe('BackgroundService', () => {
       expect(mockTimeTracker.startSession).not.toHaveBeenCalled();
     });
 
-    it('should ignore non-URL changes', async () => {
+    it("should ignore non-URL changes", async () => {
       const tabId = 123;
-      const changeInfo = { status: 'loading' };
-      const tab = { id: tabId, url: 'https://example.com', windowId: 1, active: true };
+      const changeInfo = { status: "loading" };
+      const tab = {
+        id: tabId,
+        url: "https://example.com",
+        windowId: 1,
+        active: true,
+      };
 
       await tabUpdatedHandler(tabId, changeInfo, tab);
 
@@ -229,80 +305,96 @@ describe('BackgroundService', () => {
     });
   });
 
-  describe('Window Focus Handling', () => {
+  describe("Window Focus Handling", () => {
     beforeEach(async () => {
       await backgroundService.initialize();
     });
 
-    it('should pause tracking when window loses focus', async () => {
+    it("should pause tracking when window loses focus", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const windowId = (browser.windows as any).WINDOW_ID_NONE;
-      mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
-      mockTimeTracker.pauseSession.mockResolvedValue({ ...mockActiveSession, isPaused: true });
+      mockDataModelManager.getActiveTab.mockReturnValue(mockActiveTab);
+      mockTimeTracker.pauseSession.mockResolvedValue({
+        ...mockActiveTab,
+        active: false,
+      });
 
       await windowFocusHandler(windowId);
 
       expect(mockTimeTracker.pauseSession).toHaveBeenCalled();
     });
 
-    it('should resume tracking when window regains focus', async () => {
+    it("should resume tracking when window regains focus", async () => {
       const windowId = 1;
-      const pausedSession = { ...mockActiveSession, isPaused: true };
-      mockStorageManager.getActiveSession.mockResolvedValue(pausedSession);
-      mockTimeTracker.resumeSession.mockResolvedValue(mockActiveSession);
+      const pausedTab = { ...mockActiveTab, active: false };
+      mockDataModelManager.getActiveTab.mockReturnValue(pausedTab);
+      mockTimeTracker.resumeSession.mockResolvedValue(mockActiveTab);
 
       await windowFocusHandler(windowId);
 
       expect(mockTimeTracker.resumeSession).toHaveBeenCalled();
     });
 
-    it('should not pause if no active session', async () => {
+    it("should not pause if no active session", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const windowId = (browser.windows as any).WINDOW_ID_NONE;
-      mockStorageManager.getActiveSession.mockResolvedValue(null);
+      mockDataModelManager.getActiveTab.mockReturnValue(null);
 
       await windowFocusHandler(windowId);
 
       expect(mockTimeTracker.pauseSession).not.toHaveBeenCalled();
     });
 
-    it('should handle window focus errors gracefully', async () => {
+    it("should handle window focus errors gracefully", async () => {
       const windowId = 1;
-      mockStorageManager.getActiveSession.mockRejectedValue(new Error('Storage error'));
+      mockDataModelManager.getActiveTab.mockImplementation(() => {
+        throw new Error("Access error");
+      });
 
       // Should not throw error
       await expect(windowFocusHandler(windowId)).resolves.toBeUndefined();
     });
   });
 
-  describe('WebNavigation Event Handling', () => {
+  describe("WebNavigation Event Handling", () => {
     beforeEach(async () => {
       await backgroundService.initialize();
     });
 
-    it('should start tracking on page completion for main frame', async () => {
+    it("should start tracking on page completion for main frame", async () => {
       const details = {
         tabId: 123,
         frameId: 0, // Main frame
-        url: 'https://example.com/page'
+        url: "https://example.com/page",
       };
 
-      const tab = { id: 123, url: 'https://example.com/page', windowId: 1, active: true };
+      const tab = {
+        id: 123,
+        url: "https://example.com/page",
+        windowId: 1,
+        active: true,
+      };
       browser.tabs.get.resolves(tab);
-      mockTimeTracker.extractDomain.mockReturnValue('example.com');
-      mockTimeTracker.startSession.mockResolvedValue(mockActiveSession);
+      mockTimeTracker.extractDomain.mockReturnValue("example.com");
+      mockTimeTracker.startSession.mockResolvedValue(mockActiveTab);
 
       await webNavHandler(details);
 
-      expect(mockTimeTracker.extractDomain).toHaveBeenCalledWith('https://example.com/page');
-      expect(mockTimeTracker.startSession).toHaveBeenCalledWith('example.com', 123, 1);
+      expect(mockTimeTracker.extractDomain).toHaveBeenCalledWith(
+        "https://example.com/page"
+      );
+      expect(mockTimeTracker.startSession).toHaveBeenCalledWith(
+        "example.com",
+        123,
+        1
+      );
     });
 
-    it('should ignore subframe navigation', async () => {
+    it("should ignore subframe navigation", async () => {
       const details = {
         tabId: 123,
         frameId: 1, // Subframe
-        url: 'https://ads.example.com/iframe'
+        url: "https://ads.example.com/iframe",
       };
 
       await webNavHandler(details);
@@ -310,19 +402,22 @@ describe('BackgroundService', () => {
       expect(mockTimeTracker.startSession).not.toHaveBeenCalled();
     });
 
-    it('should handle excluded domains', async () => {
+    it("should handle excluded domains", async () => {
       const details = {
         tabId: 123,
         frameId: 0,
-        url: 'https://excluded.com'
+        url: "https://excluded.com",
       };
 
-      const settingsWithExclusion = {
-        ...mockExtensionSettings,
-        excludedDomains: ['excluded.com']
+      const tab = {
+        id: 123,
+        url: "https://excluded.com",
+        windowId: 1,
+        active: true,
       };
-      mockStorageManager.getSettings.mockResolvedValue(settingsWithExclusion);
-      mockTimeTracker.extractDomain.mockReturnValue('excluded.com');
+      browser.tabs.get.resolves(tab);
+      mockSettingsRepository.isDomainExcluded.mockResolvedValue(true);
+      mockTimeTracker.extractDomain.mockReturnValue("excluded.com");
 
       await webNavHandler(details);
 
@@ -330,8 +425,8 @@ describe('BackgroundService', () => {
     });
   });
 
-  describe('Service State Management', () => {
-    it('should track initialization state', async () => {
+  describe("Service State Management", () => {
+    it("should track initialization state", async () => {
       expect(backgroundService.isInitialized()).toBe(false);
 
       await backgroundService.initialize();
@@ -339,32 +434,26 @@ describe('BackgroundService', () => {
       expect(backgroundService.isInitialized()).toBe(true);
     });
 
-    it('should provide current session status', async () => {
-      mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
+    it("should provide current active tab status", () => {
+      mockDataModelManager.getActiveTab.mockReturnValue(mockActiveTab);
 
-      const session = await backgroundService.getCurrentSession();
+      const activeTab = backgroundService.getActiveTab();
 
-      expect(session).toEqual(mockActiveSession);
-      expect(mockStorageManager.getActiveSession).toHaveBeenCalled();
+      expect(activeTab).toEqual(mockActiveTab);
+      expect(mockDataModelManager.getActiveTab).toHaveBeenCalled();
     });
 
-    it('should stop current session on shutdown', async () => {
-      mockStorageManager.getActiveSession.mockResolvedValue(mockActiveSession);
-      mockTimeTracker.stopSession.mockResolvedValue({
-        startTime: 1000,
-        endTime: 2000,
-        duration: 1000,
-        tabId: mockActiveSession.tabId,
-        windowId: mockActiveSession.windowId
-      });
+    it("should stop current session on shutdown", async () => {
+      mockDataModelManager.getActiveTab.mockReturnValue(mockActiveTab);
+      mockTimeTracker.stopSession.mockResolvedValue();
 
       await backgroundService.shutdown();
 
       expect(mockTimeTracker.stopSession).toHaveBeenCalled();
     });
 
-    it('should handle shutdown with no active session', async () => {
-      mockStorageManager.getActiveSession.mockResolvedValue(null);
+    it("should handle shutdown with no active session", async () => {
+      mockDataModelManager.getActiveTab.mockReturnValue(null);
 
       await backgroundService.shutdown();
 
@@ -372,14 +461,19 @@ describe('BackgroundService', () => {
     });
   });
 
-  describe('Error Handling and Resilience', () => {
+  describe("Error Handling and Resilience", () => {
     beforeEach(async () => {
       await backgroundService.initialize();
     });
 
-    it('should continue operation after tab event errors', async () => {
+    it("should continue operation after tab event errors", async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
-      mockTimeTracker.startSession.mockRejectedValue(new Error('Start session failed'));
+      const tabInfo = { id: 123, url: "https://example.com", windowId: 1 };
+
+      browser.tabs.get.resolves(tabInfo);
+      mockTimeTracker.startSession.mockRejectedValue(
+        new Error("Start session failed")
+      );
 
       // Should not throw error
       await expect(tabActivatedHandler(activeInfo)).resolves.toBeUndefined();
@@ -388,14 +482,14 @@ describe('BackgroundService', () => {
       expect(backgroundService.isInitialized()).toBe(true);
     });
 
-    it('should handle browser API failures gracefully', async () => {
+    it("should handle browser API failures gracefully", async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
-      browser.tabs.get.rejects(new Error('Browser API error'));
+      browser.tabs.get.rejects(new Error("Browser API error"));
 
       await expect(tabActivatedHandler(activeInfo)).resolves.toBeUndefined();
     });
 
-    it('should validate tab information before processing', async () => {
+    it("should validate tab information before processing", async () => {
       const activeInfo = { tabId: 123, windowId: 1 };
       const invalidTab = { id: 123, url: undefined, windowId: 1 };
 

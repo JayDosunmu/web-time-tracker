@@ -2,7 +2,7 @@
  * Content script manager with singleton pattern and component lifecycle management
  */
 
-import type { SessionUpdateMessage, SettingsChangeMessage } from "../../types";
+import type { SessionUpdateMessage, SettingsChangeMessage, ExtensionSettings, PillPosition } from "../../types";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
 
@@ -152,9 +152,24 @@ export class ContentScriptManager {
    */
   private async initializeComponents(): Promise<void> {
     try {
-      // Create and register TimeDisplayPill
-      const timeDisplayPill = new TimeDisplayPill();
+      // Request settings before creating components to get saved position
+      const settings = await this.requestSettings();
+      const initialPosition = settings?.pillPosition;
+
+      // Create and register TimeDisplayPill with initial position
+      const timeDisplayPill = new TimeDisplayPill(initialPosition);
+
+      // Wire up position change callback for persistence
+      timeDisplayPill.setPositionChangeCallback(this.handlePositionChange.bind(this));
+
       this.registerComponent("timeDisplayPill", timeDisplayPill);
+
+      // Apply visibility setting if available
+      if (settings && typeof settings.pillVisibility === "boolean") {
+        timeDisplayPill.onSettingsChange({
+          pillVisibility: settings.pillVisibility,
+        });
+      }
 
       console.log("Components initialized successfully");
     } catch (error) {
@@ -289,6 +304,44 @@ export class ContentScriptManager {
     }
 
     this.broadcastToComponents("onSessionUpdate", null);
+  }
+
+  /**
+   * Request settings from background service
+   */
+  private async requestSettings(): Promise<ExtensionSettings | null> {
+    try {
+      const response = await this.messageRouter.sendMessage({
+        type: "GET_SETTINGS",
+        payload: {},
+      });
+
+      if (response.success && response.data) {
+        return response.data as ExtensionSettings;
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to request settings:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Handle position changes from TimeDisplayPill drag
+   */
+  private async handlePositionChange(position: PillPosition): Promise<void> {
+    try {
+      const response = await this.messageRouter.sendMessage({
+        type: "UPDATE_PILL_POSITION",
+        payload: { position },
+      });
+
+      if (!response.success) {
+        console.error("Failed to save pill position:", response.error);
+      }
+    } catch (error) {
+      console.error("Error saving pill position:", error);
+    }
   }
 
   /**

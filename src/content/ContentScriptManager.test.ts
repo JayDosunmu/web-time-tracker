@@ -42,6 +42,7 @@ describe("ContentScriptManager", () => {
     mockTimeDisplayPill = {
       onSessionUpdate: jest.fn(),
       onSettingsChange: jest.fn(),
+      setPositionChangeCallback: jest.fn(),
       destroy: jest.fn(),
     } as any;
 
