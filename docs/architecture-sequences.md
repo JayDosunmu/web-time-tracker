@@ -2,7 +2,7 @@
 
 This document shows the detailed sequence of events for key operations in the Web Time Tracker extension.
 
-## Tab Load / Navigation
+## Tab Load / Navigation (TAB_ENTER)
 
 When a user navigates to a new page or activates a tab:
 
@@ -11,8 +11,11 @@ sequenceDiagram
     autonumber
     participant Browser as Browser
     participant BS as BackgroundService
+    participant DMM as DataModelManager
     participant TT as TimeTracker
-    participant SM as StorageManager
+    participant HR as HistoryRepository
+    participant TR as TabRepository
+    participant SR as SettingsRepository
     participant Storage as browser.storage.local
     participant MR as MessageRouter
     participant CSM as ContentScriptManager
@@ -28,36 +31,41 @@ sequenceDiagram
     BS->>TT: extractDomain(url)
     TT-->>BS: domain
 
-    BS->>SM: getSettings()
-    SM->>Storage: get(['settings'])
-    Storage-->>SM: settings
-    SM-->>BS: ExtensionSettings
+    BS->>DMM: isDomainExcluded(domain)
+    DMM->>SR: isDomainExcluded(domain)
+    SR->>Storage: get(['settings'])
+    Storage-->>SR: settings
+    SR-->>DMM: boolean
+    DMM-->>BS: boolean
 
-    BS->>BS: Check excludedDomains
     alt Domain is excluded
         BS-->>Browser: Skip tracking
     end
 
-    BS->>SM: getActiveSession()
-    SM->>Storage: get(['activeSession'])
-    Storage-->>SM: activeSession
-    SM-->>BS: ActiveSession | null
+    BS->>DMM: handleTabEnter(context)
 
-    alt Active session exists
-        BS->>TT: stopSession()
-        TT->>TT: calculateDuration()
-        TT->>SM: updateDomainData(domain, session)
-        SM->>Storage: set({ domains: {...} })
-        TT->>SM: setActiveSession(null)
-        SM->>Storage: set({ activeSession: null })
-        TT-->>BS: completedSession
+    Note over DMM: If domain changed, first handleTabExit()
+
+    DMM->>HR: getDay(dateKey)
+    HR->>Storage: get(['day_YYYY-MM-DD'])
+    Storage-->>HR: Day | null
+    HR-->>DMM: Day
+
+    alt Day doesn't exist
+        DMM->>HR: createEmptyDay(midnightTimestamp)
+        DMM->>HR: setDay(dateKey, day)
+        HR->>Storage: set({ day_YYYY-MM-DD: day })
     end
 
-    BS->>TT: startSession(domain, tabId, windowId)
-    TT->>TT: Create ActiveSession with performance.now()
-    TT->>SM: setActiveSession(session)
-    SM->>Storage: set({ activeSession })
-    TT-->>BS: newSession
+    DMM->>DMM: Create ActiveTab with accumulated totalTime
+    DMM->>TR: setActiveTab(activeTab)
+    TR->>Storage: set({ activeTab })
+
+    DMM->>DMM: Increment domain activation count
+    DMM->>HR: setDay(dateKey, updatedDay)
+    HR->>Storage: set({ day_YYYY-MM-DD: updatedDay })
+
+    DMM-->>BS: ActiveTab
 
     BS->>BS: Build SESSION_UPDATE message
     BS->>MR: browser.tabs.sendMessage(tabId, message)
@@ -111,52 +119,158 @@ sequenceDiagram
     autonumber
     participant Browser as Browser
     participant BS as BackgroundService
-    participant TT as TimeTracker
-    participant SM as StorageManager
+    participant DMM as DataModelManager
+    participant HR as HistoryRepository
+    participant TR as TabRepository
     participant Storage as browser.storage.local
     participant MR as MessageRouter
     participant TDP as TimeDisplayPill
 
     Browser->>BS: windows.onFocusChanged(windowId)
 
-    BS->>SM: getActiveSession()
-    SM->>Storage: get(['activeSession'])
-    Storage-->>SM: activeSession
-    SM-->>BS: ActiveSession | null
+    BS->>DMM: getActiveTab()
+    DMM-->>BS: ActiveTab | null
 
-    alt No active session
+    alt No active tab
         BS-->>Browser: No-op
     end
 
     alt Window lost focus (windowId === WINDOW_ID_NONE)
-        BS->>TT: pauseSession()
-        TT->>SM: getActiveSession()
-        SM-->>TT: activeSession
-        TT->>TT: Set isPaused = true
-        TT->>SM: setActiveSession(pausedSession)
-        SM->>Storage: set({ activeSession: {..., isPaused: true} })
-        TT-->>BS: pausedSession
+        BS->>DMM: pauseSession()
+        DMM->>DMM: Calculate elapsed = now - lastTimerCheck
+        DMM->>DMM: recordElapsedTime(elapsed, now)
+        DMM->>HR: setDay(dateKey, updatedDay)
+        HR->>Storage: set({ day_YYYY-MM-DD })
+        DMM->>DMM: Set activeTab.active = false
+        DMM->>TR: setActiveTab(activeTab)
+        TR->>Storage: set({ activeTab })
+        DMM-->>BS: pausedActiveTab
 
-        BS->>BS: Build SESSION_UPDATE (isPaused: true)
+        BS->>BS: Build SESSION_UPDATE (isActive: false)
         BS->>MR: browser.tabs.sendMessage()
         MR->>TDP: onSessionUpdate()
         TDP->>TDP: Stop animation, show paused state
     else Window gained focus
-        alt Session was paused
-            BS->>TT: resumeSession()
-            TT->>SM: getActiveSession()
-            SM-->>TT: activeSession
-            TT->>TT: Set isPaused = false
-            TT->>SM: setActiveSession(resumedSession)
-            SM->>Storage: set({ activeSession: {..., isPaused: false} })
-            TT-->>BS: resumedSession
+        alt Session was paused (active = false)
+            BS->>DMM: resumeSession()
+            DMM->>DMM: Set activeTab.active = true
+            DMM->>DMM: Set activeTab.lastTimerCheck = now
+            DMM->>TR: setActiveTab(activeTab)
+            TR->>Storage: set({ activeTab })
+            DMM-->>BS: resumedActiveTab
 
-            BS->>BS: Build SESSION_UPDATE (isPaused: false)
+            BS->>BS: Build SESSION_UPDATE (isActive: true)
             BS->>MR: browser.tabs.sendMessage()
             MR->>TDP: onSessionUpdate()
             TDP->>TDP: Restart animation loop
         end
     end
+```
+
+---
+
+## Hour Boundary (HOUR_ELAPSED)
+
+When the clock crosses an hour boundary:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Timer as hourBoundaryTimer
+    participant DMM as DataModelManager
+    participant HR as HistoryRepository
+    participant TR as TabRepository
+    participant Storage as browser.storage.local
+
+    Note over Timer,DMM: Timer fires at top of hour
+
+    Timer->>DMM: handleHourElapsed()
+
+    DMM->>DMM: Check activeTab exists and is active
+    alt No active tab or inactive
+        DMM-->>Timer: No-op
+    end
+
+    DMM->>DMM: Calculate elapsed = now - lastTimerCheck
+
+    DMM->>DMM: recordElapsedTime(elapsed, now)
+    DMM->>HR: getDay(dateKey)
+    HR->>Storage: get(['day_YYYY-MM-DD'])
+    Storage-->>HR: Day
+    HR-->>DMM: Day
+
+    DMM->>DMM: Update Day.totalTime += elapsed
+    DMM->>DMM: Update hours[currentHour].domains[domain].totalTime
+    DMM->>DMM: Update domains[domain].totalTime
+
+    DMM->>HR: setDay(dateKey, updatedDay)
+    HR->>Storage: set({ day_YYYY-MM-DD: updatedDay })
+
+    DMM->>DMM: Update activeTab.lastTimerCheck = now
+    DMM->>TR: setActiveTab(activeTab)
+    TR->>Storage: set({ activeTab })
+
+    DMM->>DMM: setupHourBoundaryDetection()
+    Note over DMM: Schedule next timer for next hour
+```
+
+---
+
+## Day Boundary (DAY_ELAPSED)
+
+When the clock crosses midnight:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Timer as dayBoundaryTimer
+    participant DMM as DataModelManager
+    participant HR as HistoryRepository
+    participant TR as TabRepository
+    participant SR as SettingsRepository
+    participant Storage as browser.storage.local
+
+    Note over Timer,DMM: Timer fires at midnight (local timezone)
+
+    Timer->>DMM: handleDayElapsed()
+
+    DMM->>DMM: Check activeTab exists and is active
+    alt No active tab or inactive
+        DMM-->>Timer: No-op (just reset timers)
+    end
+
+    DMM->>DMM: Calculate elapsed = now - lastTimerCheck
+
+    Note over DMM: Record remaining time to yesterday
+    DMM->>DMM: recordElapsedTime(elapsed, lastTimerCheck)
+    DMM->>HR: getDay(yesterdayDateKey)
+    DMM->>HR: setDay(yesterdayDateKey, updatedDay)
+
+    Note over DMM: Reset ActiveTab for new day
+    DMM->>DMM: activeTab.totalTime = 0
+    DMM->>DMM: activeTab.lastTimerCheck = now
+    DMM->>DMM: activeTab.lastActivated = now
+    DMM->>TR: setActiveTab(activeTab)
+    TR->>Storage: set({ activeTab })
+
+    Note over DMM: Clear expired days
+    DMM->>SR: getSettings()
+    SR->>Storage: get(['settings'])
+    Storage-->>SR: settings
+    SR-->>DMM: { dataRetentionDays: 30 }
+
+    DMM->>HR: clearExpiredDays(dataRetentionDays)
+    HR->>HR: Find days older than retention period
+    loop For each expired day
+        HR->>Storage: remove('day_YYYY-MM-DD')
+        HR->>HR: Update history metadata
+    end
+    HR->>Storage: set({ history: updatedHistory })
+    HR-->>DMM: deletedCount
+
+    Note over DMM: Reset boundary timers
+    DMM->>DMM: setupDayBoundaryDetection()
+    DMM->>DMM: setupHourBoundaryDetection()
 ```
 
 ---
@@ -329,12 +443,15 @@ sequenceDiagram
 
 ## Summary: Event → Component Flow
 
-| Trigger | Event | Handler | Result |
-|---------|-------|---------|--------|
-| Tab switch | `tabs.onActivated` | BackgroundService | Stop old session → Start new → Broadcast |
-| URL change | `tabs.onUpdated` | BackgroundService | Stop old session → Start new → Broadcast |
-| Navigation complete | `webNavigation.onCompleted` | BackgroundService | Stop old session → Start new → Broadcast |
-| Window focus | `windows.onFocusChanged` | BackgroundService | Pause/Resume → Broadcast |
-| SPA navigation | `popstate`/`pushState` | ContentScriptManager | Request session state → Update pill |
-| Tab visibility | `visibilitychange` | ContentScriptManager | Request fresh state → Update pill |
-| Page unload | `beforeunload` | ContentScriptManager | Destroy components → Cleanup |
+| Trigger | Event | Handler | Lifecycle | Result |
+|---------|-------|---------|-----------|--------|
+| Tab switch | `tabs.onActivated` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Broadcast |
+| URL change | `tabs.onUpdated` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Broadcast |
+| Navigation complete | `webNavigation.onCompleted` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Broadcast |
+| Window focus lost | `windows.onFocusChanged` | BackgroundService → DataModelManager | pauseSession() | Record time → Set inactive → Broadcast |
+| Window focus gained | `windows.onFocusChanged` | BackgroundService → DataModelManager | resumeSession() | Set active → Broadcast |
+| Hour boundary | `setTimeout` | DataModelManager | HOUR_ELAPSED | Record time → Reset checkpoint |
+| Day boundary | `setTimeout` | DataModelManager | DAY_ELAPSED | Record time → Reset totals → Clear expired |
+| SPA navigation | `popstate`/`pushState` | ContentScriptManager | Request state | Request session state → Update pill |
+| Tab visibility | `visibilitychange` | ContentScriptManager | Request state | Request fresh state → Update pill |
+| Page unload | `beforeunload` | ContentScriptManager | Cleanup | Destroy components → Cleanup |

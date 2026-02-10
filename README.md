@@ -38,27 +38,38 @@ A Firefox extension that tracks time spent on different websites. It displays a 
 ┌────────────────────────────▼─────────────────────────────┐
 │                    Background Layer                       │
 │                                                          │
-│  BackgroundService                                       │
-│     ├── SessionManager   (browser event handling)        │
-│     ├── TimeTracker      (start / stop / pause logic)    │
-│     └── StorageManager   (browser.storage.local)         │
+│  BackgroundService (event orchestration)                 │
+│     ├── DataModelManager (business logic)                │
+│     │      ├── handleTabEnter / handleTabExit            │
+│     │      └── hour/day boundary detection               │
+│     └── TimeTracker (session start / stop / pause)       │
+└────────────────────────────┬─────────────────────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────┐
+│                   Repository Layer                        │
+│                                                          │
+│  HistoryRepository    TabRepository    SettingsRepository │
+│  (days / hours)       (active tab)     (user prefs)      │
 └────────────────────────────┬─────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────┐
 │                     Storage Layer                         │
 │                                                          │
 │  browser.storage.local                                   │
-│     ├── Active session state                             │
-│     ├── Per-domain time totals                           │
-│     └── Daily statistics buckets                         │
+│     ├── activeTab (current domain state)                 │
+│     ├── history (day metadata)                           │
+│     ├── day_YYYY-MM-DD (per-day hourly aggregations)     │
+│     └── settings (user preferences)                      │
 └──────────────────────────────────────────────────────────┘
 ```
 
 **Content Layer** -- Runs on every web page. `ContentScriptManager` initialises the `TimeDisplayPill` (rendered inside a Shadow DOM to avoid style collisions) and a `MessageRouter` that handles typed messages to/from the background service.
 
-**Background Layer** -- A persistent background script that owns the core logic. `BackgroundService` listens to browser events (`tabs.onActivated`, `windows.onFocusChanged`, `webNavigation.onCompleted`, `idle.onStateChanged`) through `SessionManager`, delegates time calculations to `TimeTracker`, and persists data via `StorageManager`.
+**Background Layer** -- A persistent background script that owns the core logic. `BackgroundService` listens to browser events (`tabs.onActivated`, `windows.onFocusChanged`, `webNavigation.onCompleted`) and coordinates with `DataModelManager` for business logic (lifecycle events like TAB_ENTER, TAB_EXIT, HOUR_ELAPSED, DAY_ELAPSED) and `TimeTracker` for session management.
 
-**Storage Layer** -- All state lives in `browser.storage.local`. Sessions are stored with millisecond precision and aggregated into daily buckets to keep storage bounded.
+**Repository Layer** -- Domain-specific data access. `HistoryRepository` manages historical day/hour data, `TabRepository` manages active tab state, and `SettingsRepository` manages user preferences. Each repository provides a type-safe API for its domain.
+
+**Storage Layer** -- All state lives in `browser.storage.local`. Data is organized hierarchically: `activeTab` for current state, `history` for day metadata, individual `day_YYYY-MM-DD` keys for daily aggregations with hourly breakdowns, and `settings` for user preferences.
 
 ### Detailed Documentation
 
