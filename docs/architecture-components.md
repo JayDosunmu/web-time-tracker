@@ -16,8 +16,15 @@ graph TB
 
     subgraph Background["Background Service Layer"]
         BS["BackgroundService<br/><i>Orchestrator</i>"]
-        TT["TimeTracker<br/><i>Business Logic</i>"]
-        SM["StorageManager<br/><i>Persistence</i>"]
+        DMM["DataModelManager<br/><i>Business Logic</i>"]
+        TT["TimeTracker<br/><i>Session Management</i>"]
+    end
+
+    subgraph Repositories["Repository Layer"]
+        HR["HistoryRepository<br/><i>Days/Hours</i>"]
+        TR["TabRepository<br/><i>Active Tab</i>"]
+        SR["SettingsRepository<br/><i>User Prefs</i>"]
+        SM["StorageManager<br/><i>Generic Storage</i>"]
     end
 
     subgraph Content["Content Script Layer (per tab)"]
@@ -36,8 +43,14 @@ graph TB
     webNav --> BS
 
     %% Background internal flow
+    BS --> DMM
     BS --> TT
-    TT --> SM
+    DMM --> HR
+    DMM --> TR
+    DMM --> SR
+    HR --> SM
+    TR --> SM
+    SR --> SM
     SM --> storage
 
     %% Message passing
@@ -59,8 +72,17 @@ graph TB
 | Component | File | Purpose |
 |-----------|------|---------|
 | **BackgroundService** | [src/background/background.ts](../src/background/background.ts) | Main orchestrator that registers browser event listeners, handles message passing from content scripts, and coordinates session lifecycle |
-| **TimeTracker** | [src/background/services/TimeTracker.ts](../src/background/services/TimeTracker.ts) | Core business logic for starting/stopping/pausing sessions, extracting domains from URLs, and calculating session durations |
-| **StorageManager** | [src/background/models/StorageManager.ts](../src/background/models/StorageManager.ts) | Type-safe abstraction over `browser.storage.local` with domain data, active session, and settings management |
+| **DataModelManager** | [src/background/services/DataModelManager.ts](../src/background/services/DataModelManager.ts) | Business logic for time tracking: handles lifecycle events (TabEnter, TabExit, HourElapsed, DayElapsed), manages active tab state, and coordinates with repositories for data persistence |
+| **TimeTracker** | [src/background/services/TimeTracker.ts](../src/background/services/TimeTracker.ts) | Session management for starting/stopping/pausing sessions, extracting domains from URLs, and calculating session durations |
+
+### Repository Layer
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| **HistoryRepository** | [src/background/repositories/HistoryRepository.ts](../src/background/repositories/HistoryRepository.ts) | Data access for History, Day, and Hour records. Manages per-day storage keys (`day_YYYY-MM-DD`), hour-level aggregations, and data retention cleanup |
+| **TabRepository** | [src/background/repositories/TabRepository.ts](../src/background/repositories/TabRepository.ts) | Data access for ActiveTab state. Manages the currently tracked domain with totalTime, activation timestamps, and timer checkpoints |
+| **SettingsRepository** | [src/background/repositories/SettingsRepository.ts](../src/background/repositories/SettingsRepository.ts) | Data access for ExtensionSettings. Manages user preferences including pill position, visibility, retention days, and excluded domains |
+| **StorageManager** | [src/background/models/StorageManager.ts](../src/background/models/StorageManager.ts) | Generic type-safe abstraction over `browser.storage.local` used by repositories |
 
 ### Content Script Layer
 
@@ -182,6 +204,106 @@ class TimeTracker {
 }
 ```
 
+### DataModelManager
+
+```typescript
+class DataModelManager {
+  // Singleton
+  static getInstance(
+    historyRepository?: HistoryRepository,
+    tabRepository?: TabRepository,
+    settingsRepository?: SettingsRepository
+  ): DataModelManager
+  static resetInstance(): void
+
+  // Lifecycle
+  initialize(): Promise<void>
+
+  // Lifecycle event handlers
+  handleTabEnter(context: LifecycleEventContext): Promise<ActiveTab>
+  handleTabExit(): Promise<void>
+  handleHourElapsed(): Promise<void>
+  handleDayElapsed(): Promise<void>
+
+  // Session control
+  pauseSession(): Promise<ActiveTab | null>
+  resumeSession(): Promise<ActiveTab | null>
+
+  // State access
+  getCurrentDisplayTime(): number
+  getActiveTab(): ActiveTab | null
+  isDomainExcluded(domain: string): Promise<boolean>
+}
+```
+
+### HistoryRepository
+
+```typescript
+class HistoryRepository {
+  // Singleton
+  static getInstance(storage?: StorageArea): HistoryRepository
+  static resetInstance(): void
+
+  // History metadata
+  getHistory(): Promise<History>
+  setHistory(history: History): Promise<void>
+
+  // Day operations
+  getDay(dateKey: string): Promise<Day | null>
+  setDay(dateKey: string, day: Day): Promise<void>
+  deleteDay(dateKey: string): Promise<void>
+  getDaysInRange(startDate: string, endDate: string): Promise<Record<string, Day>>
+
+  // Data retention
+  clearExpiredDays(retentionDays: number): Promise<number>
+
+  // Factory methods
+  createEmptyDay(timestamp: number): Day
+
+  // Utilities (deprecated - use dateUtils)
+  static getDateKey(timestamp: number): string
+  static getMidnightTimestamp(timestamp: number): number
+}
+```
+
+### TabRepository
+
+```typescript
+class TabRepository {
+  // Singleton
+  static getInstance(storage?: StorageArea): TabRepository
+  static resetInstance(): void
+
+  // Active tab state
+  getActiveTab(): Promise<ActiveTab | null>
+  setActiveTab(tab: ActiveTab | null): Promise<void>
+
+  // Factory method
+  static createActiveTab(domain: string, totalTime?: number): ActiveTab
+}
+```
+
+### SettingsRepository
+
+```typescript
+class SettingsRepository {
+  // Singleton
+  static getInstance(storage?: StorageArea): SettingsRepository
+  static resetInstance(): void
+
+  // Settings operations
+  getSettings(): Promise<ExtensionSettings>
+  updateSettings(updates: Partial<ExtensionSettings>): Promise<void>
+  setSettings(settings: ExtensionSettings): Promise<void>
+  getDefaultSettings(): ExtensionSettings
+
+  // Domain exclusion helpers
+  isDomainExcluded(domain: string): Promise<boolean>
+  addExcludedDomain(domain: string): Promise<void>
+  removeExcludedDomain(domain: string): Promise<void>
+}
+```
+
 ### BackgroundService
 
 ```typescript
@@ -283,30 +405,45 @@ interface SessionState {
 
 ## Data Types
 
-### Core Types
+### Core Types (V2)
 
 ```typescript
-interface ActiveSession {
+interface ActiveTab {
   domain: string;
-  startTime: number;     // performance.now() timestamp
-  tabId: number;
-  windowId: number;
-  isPaused?: boolean;
+  totalTime: number;       // Accumulated time for this domain today (ms)
+  active: boolean;
+  lastActivated: number;   // Timestamp when domain became active
+  lastTimerCheck: number;  // Checkpoint for hour/day boundary handling
 }
 
-interface Session {
-  startTime: number;
-  endTime?: number;
-  duration: number;      // milliseconds
-  tabId: number;
-  windowId: number;
+interface HourDomainData {
+  totalTime: number;       // ms
+  activationsCount: number;
 }
 
-interface DomainData {
-  totalTime: number;                    // total ms spent on domain
-  sessions: Session[];                  // completed sessions
-  dailyStats: Record<string, number>;   // "YYYY-MM-DD" → milliseconds
-  lastAccessed: number;                 // timestamp
+interface HourData {
+  domains: Record<string, HourDomainData>;
+}
+
+interface DayDomainData {
+  totalTime: number;       // ms
+  activationsCount: number;
+  lastActivated: number;   // timestamp
+  lastTimerCheck: number;  // timestamp
+}
+
+interface Day {
+  totalTime: number;       // Total time across all domains for this day (ms)
+  hours: HourData[];       // Index 0-23
+  domains: Record<string, DayDomainData>;
+  timestamp: number;       // Midnight timestamp (used to track time shifts)
+  shiftedHours: Record<string, HourData>; // Key: "hour,shift" for time-shift handling
+}
+
+interface History {
+  earliest: number;        // Timestamp of earliest day
+  latest: number;          // Timestamp of latest day
+  days: Record<string, Day>; // Key: "YYYY-MM-DD" format
 }
 
 interface ExtensionSettings {
@@ -320,18 +457,39 @@ interface PillPosition {
   x: number;
   y: number;
 }
+
+interface LifecycleEventContext {
+  timestamp: number;
+  domain: string;
+  tabId: number;
+  windowId: number;
+}
+
+type LifecycleEventType =
+  | "TAB_ENTER"
+  | "TAB_EXIT"
+  | "SECOND_ELAPSED"
+  | "HOUR_ELAPSED"
+  | "DAY_ELAPSED"
+  | "TIME_CHANGED";
 ```
 
-### Storage Schema
+### Storage Schema (V2)
 
 ```typescript
-interface StorageSchema {
-  domains: Record<string, DomainData>;
-  activeSession: ActiveSession | null;
+interface StorageSchemaV2 {
+  activeTab: ActiveTab | null;
+  history: History;
   settings: ExtensionSettings;
-  version: number;      // For data migration
-  installDate: number;  // First install timestamp
+  version: number;
+  installDate: number;
 }
+
+// Storage keys:
+// - "activeTab"          → ActiveTab state
+// - "history"            → History metadata
+// - "day_YYYY-MM-DD"     → Individual Day records
+// - "settings"           → ExtensionSettings
 ```
 
 ---
@@ -340,7 +498,26 @@ interface StorageSchema {
 
 | Pattern | Usage |
 |---------|-------|
-| **Singleton** | BackgroundService, TimeTracker, StorageManager, ContentScriptManager (one instance per context) |
+| **Singleton** | BackgroundService, DataModelManager, TimeTracker, all Repositories, ContentScriptManager (one instance per context) |
+| **Repository** | HistoryRepository, TabRepository, SettingsRepository provide domain-specific data access over generic StorageManager |
 | **Observer/Pub-Sub** | MessageRouter broadcasts to registered handlers, ContentScriptManager broadcasts to components |
-| **Repository** | StorageManager abstracts browser.storage.local with type-safe API |
+| **Service Layer** | DataModelManager encapsulates business logic and lifecycle events, coordinating between repositories |
 | **Adapter** | TimeTracker adapts duration calculation and domain extraction |
+
+### Layered Architecture
+
+```
+┌─────────────────────────────────────┐
+│  Presentation (Content Scripts)     │
+├─────────────────────────────────────┤
+│  Orchestration (BackgroundService)  │
+├─────────────────────────────────────┤
+│  Business Logic (DataModelManager)  │
+├─────────────────────────────────────┤
+│  Data Access (Repositories)         │
+├─────────────────────────────────────┤
+│  Persistence (StorageManager)       │
+├─────────────────────────────────────┤
+│  Storage (browser.storage.local)    │
+└─────────────────────────────────────┘
+```

@@ -21,13 +21,20 @@ flowchart TD
 
     subgraph Background["Background Service"]
         BS["BackgroundService<br/><i>Event Handler</i>"]
+        DMM["DataModelManager<br/><i>Business Logic</i>"]
         TT["TimeTracker<br/><i>Session Logic</i>"]
-        SM["StorageManager<br/><i>Data Layer</i>"]
+    end
+
+    subgraph Repositories["Repository Layer"]
+        HR["HistoryRepository"]
+        TR["TabRepository"]
+        SR["SettingsRepository"]
     end
 
     subgraph Storage["browser.storage.local"]
-        domains[("domains<br/>{domain → DomainData}")]
-        activeSession[("activeSession<br/>ActiveSession | null")]
+        activeTab[("activeTab<br/>ActiveTab | null")]
+        history[("history<br/>History metadata")]
+        dayRecords[("day_YYYY-MM-DD<br/>Day records")]
         settings[("settings<br/>ExtensionSettings")]
     end
 
@@ -53,26 +60,30 @@ flowchart TD
     winFocus --> BS
 
     %% Background processes events
+    BS --> DMM
     BS --> TT
-    TT --> SM
+    DMM --> HR
+    DMM --> TR
+    DMM --> SR
 
-    %% Storage operations
-    SM --> domains
-    SM --> activeSession
-    SM --> settings
+    %% Repository to Storage operations
+    HR --> history
+    HR --> dayRecords
+    TR --> activeTab
+    SR --> settings
 
     %% Session updates broadcast to content scripts
     BS -.->|"SESSION_UPDATE"| CSM
     CSM --> TDP
 
     %% Popup reads storage directly
-    APP --> domains
-    APP --> activeSession
+    APP --> activeTab
+    APP --> dayRecords
 ```
 
 ---
 
-## Session Start Flow
+## Session Start Flow (TAB_ENTER)
 
 When a user navigates to a new page or switches tabs:
 
@@ -86,12 +97,18 @@ flowchart LR
         validate["Validate URL<br/>(http/https only)"]
         extract["Extract Domain"]
         checkExcluded["Check Excluded<br/>Domains"]
-        stopOld["Stop Current<br/>Session"]
-        startNew["Start New<br/>Session"]
+        tabExit["handleTabExit()<br/>(if domain changed)"]
+        tabEnter["handleTabEnter()<br/>TAB_ENTER lifecycle"]
+    end
+
+    subgraph Storage
+        getToday["Get/Create Today's<br/>Day record"]
+        createActiveTab["Create ActiveTab<br/>with accumulated time"]
+        updateDomain["Increment domain<br/>activation count"]
     end
 
     subgraph Output
-        storage["Save to Storage"]
+        persist["Persist to<br/>TabRepository"]
         broadcast["Broadcast<br/>SESSION_UPDATE"]
     end
 
@@ -99,16 +116,19 @@ flowchart LR
     validate -->|valid| extract
     validate -->|invalid| X1[("Skip")]
     extract --> checkExcluded
-    checkExcluded -->|not excluded| stopOld
+    checkExcluded -->|not excluded| tabExit
     checkExcluded -->|excluded| X2[("Skip")]
-    stopOld --> startNew
-    startNew --> storage
-    storage --> broadcast
+    tabExit --> tabEnter
+    tabEnter --> getToday
+    getToday --> createActiveTab
+    createActiveTab --> updateDomain
+    updateDomain --> persist
+    persist --> broadcast
 ```
 
 ---
 
-## Session Stop Flow
+## Session Stop Flow (TAB_EXIT)
 
 When stopping a session (due to tab switch, navigation, or shutdown):
 
@@ -119,93 +139,132 @@ flowchart LR
     end
 
     subgraph Processing
-        getActive["Get Active<br/>Session"]
-        calcDuration["Calculate<br/>Duration"]
-        createSession["Create Completed<br/>Session Object"]
+        getActive["Get ActiveTab"]
+        calcElapsed["Calculate elapsed<br/>since lastTimerCheck"]
+        tabExit["handleTabExit()<br/>TAB_EXIT lifecycle"]
     end
 
     subgraph Storage
-        updateDomain["Update DomainData<br/>- totalTime += duration<br/>- sessions.push(session)<br/>- dailyStats[date] += duration"]
-        clearActive["Clear activeSession"]
+        recordTime["recordElapsedTime()<br/>- Update Day totalTime<br/>- Update Hour domains<br/>- Update Day domains"]
+        clearActive["Clear activeTab<br/>(TabRepository)"]
     end
 
     trigger --> getActive
-    getActive -->|exists| calcDuration
+    getActive -->|exists| calcElapsed
     getActive -->|null| X[("No-op")]
-    calcDuration --> createSession
-    createSession --> updateDomain
-    updateDomain --> clearActive
+    calcElapsed --> tabExit
+    tabExit --> recordTime
+    recordTime --> clearActive
 ```
 
 ---
 
-## Domain Data Accumulation
+## Time Recording Flow
 
-Each domain maintains aggregated statistics:
+When elapsed time is recorded (during TAB_EXIT, HOUR_ELAPSED, or DAY_ELAPSED):
 
 ```mermaid
 flowchart TD
-    subgraph Session["Completed Session"]
-        duration["duration: 5000ms"]
+    subgraph Input
+        elapsed["elapsed: 5000ms"]
+        timestamp["timestamp: Date.now()"]
     end
 
-    subgraph Before["DomainData (before)"]
-        totalBefore["totalTime: 60000ms"]
-        sessionsBefore["sessions: [s1, s2, ...]"]
-        dailyBefore["dailyStats: {'2024-01-15': 30000}"]
+    subgraph DayRecord["Day Record (day_YYYY-MM-DD)"]
+        dayTotal["totalTime += 5000ms"]
+        hourData["hours[currentHour].domains[domain].totalTime += 5000ms"]
+        dayDomain["domains[domain].totalTime += 5000ms"]
     end
 
-    subgraph After["DomainData (after)"]
-        totalAfter["totalTime: 65000ms"]
-        sessionsAfter["sessions: [s1, s2, ..., newSession]"]
-        dailyAfter["dailyStats: {'2024-01-15': 35000}"]
+    subgraph ActiveTab["ActiveTab (in-memory)"]
+        tabTotal["totalTime += 5000ms"]
+        checkpoint["lastTimerCheck = timestamp"]
     end
 
-    Session --> |"+= duration"| totalAfter
-    Session --> |"push()"| sessionsAfter
-    Session --> |"+= duration"| dailyAfter
-    Before -.-> After
+    elapsed --> dayTotal
+    elapsed --> hourData
+    elapsed --> dayDomain
+    elapsed --> tabTotal
+    timestamp --> checkpoint
+```
+
+### Data Hierarchy
+
+```
+History (metadata)
+└── days: Record<"YYYY-MM-DD", Day>
+    └── Day
+        ├── totalTime (all domains this day)
+        ├── hours[0-23]: HourData[]
+        │   └── domains: Record<domain, HourDomainData>
+        │       ├── totalTime
+        │       └── activationsCount
+        └── domains: Record<domain, DayDomainData>
+            ├── totalTime
+            ├── activationsCount
+            ├── lastActivated
+            └── lastTimerCheck
 ```
 
 ---
 
-## Storage Schema
+## Storage Schema (V2)
 
 ```mermaid
 erDiagram
     STORAGE {
-        object domains
-        object activeSession
+        object activeTab
+        object history
         object settings
         number version
         number installDate
     }
 
-    DOMAINS ||--o{ DOMAIN_DATA : contains
-    DOMAIN_DATA {
-        number totalTime
-        array sessions
-        object dailyStats
-        number lastAccessed
-    }
-
-    DOMAIN_DATA ||--o{ SESSION : contains
-    SESSION {
-        number startTime
-        number endTime
-        number duration
-        number tabId
-        number windowId
-    }
-
-    ACTIVE_SESSION {
+    STORAGE ||--|| ACTIVE_TAB : contains
+    ACTIVE_TAB {
         string domain
-        number startTime
-        number tabId
-        number windowId
-        boolean isPaused
+        number totalTime
+        boolean active
+        number lastActivated
+        number lastTimerCheck
     }
 
+    STORAGE ||--|| HISTORY : contains
+    HISTORY {
+        number earliest
+        number latest
+        object days
+    }
+
+    HISTORY ||--o{ DAY : "day_YYYY-MM-DD"
+    DAY {
+        number totalTime
+        array hours
+        object domains
+        number timestamp
+        object shiftedHours
+    }
+
+    DAY ||--o{ HOUR_DATA : "hours[0-23]"
+    HOUR_DATA {
+        object domains
+    }
+
+    HOUR_DATA ||--o{ HOUR_DOMAIN_DATA : "domains[domain]"
+    HOUR_DOMAIN_DATA {
+        number totalTime
+        number activationsCount
+    }
+
+    DAY ||--o{ DAY_DOMAIN_DATA : "domains[domain]"
+    DAY_DOMAIN_DATA {
+        number totalTime
+        number activationsCount
+        number lastActivated
+        number lastTimerCheck
+    }
+
+    STORAGE ||--|| SETTINGS : contains
     SETTINGS {
         object pillPosition
         boolean pillVisibility
@@ -213,6 +272,76 @@ erDiagram
         array excludedDomains
     }
 ```
+
+### Storage Keys
+
+| Key Pattern | Type | Description |
+|-------------|------|-------------|
+| `activeTab` | `ActiveTab \| null` | Current domain tracking state |
+| `history` | `History` | Metadata: earliest/latest timestamps, day references |
+| `day_YYYY-MM-DD` | `Day` | Per-day records with hourly breakdowns |
+| `settings` | `ExtensionSettings` | User preferences |
+
+---
+
+## Lifecycle Events
+
+The `DataModelManager` handles these lifecycle events:
+
+| Event | Trigger | Action |
+|-------|---------|--------|
+| `TAB_ENTER` | User navigates to a new domain | Exit previous tab, create/restore ActiveTab for domain, increment activation count |
+| `TAB_EXIT` | User leaves current domain | Record elapsed time, clear ActiveTab |
+| `HOUR_ELAPSED` | Clock crosses hour boundary | Record elapsed time to current hour, reset timer checkpoint |
+| `DAY_ELAPSED` | Clock crosses midnight | Record remaining time to yesterday, reset ActiveTab for new day, clear expired days |
+
+### Boundary Detection
+
+```mermaid
+flowchart TD
+    subgraph Timers["Boundary Timers"]
+        hourTimer["hourBoundaryTimer<br/>(setTimeout to next hour)"]
+        dayTimer["dayBoundaryTimer<br/>(setTimeout to midnight)"]
+    end
+
+    subgraph Handlers["Event Handlers"]
+        hourHandler["handleHourElapsed()"]
+        dayHandler["handleDayElapsed()"]
+    end
+
+    subgraph Actions["Actions"]
+        recordHour["Record time to<br/>current hour"]
+        recordDay["Record time to<br/>yesterday"]
+        resetDay["Reset ActiveTab<br/>totalTime = 0"]
+        clearExpired["Clear days older than<br/>dataRetentionDays"]
+    end
+
+    hourTimer -->|triggers| hourHandler
+    dayTimer -->|triggers| dayHandler
+
+    hourHandler --> recordHour
+    hourHandler -->|reset| hourTimer
+
+    dayHandler --> recordDay
+    dayHandler --> resetDay
+    dayHandler --> clearExpired
+    dayHandler -->|reset| hourTimer
+    dayHandler -->|reset| dayTimer
+```
+
+---
+
+## Shared Utilities
+
+Date operations are centralized in `src/shared/dateUtils.ts`:
+
+| Function | Purpose |
+|----------|---------|
+| `getDateKey(timestamp)` | Returns `YYYY-MM-DD` format (local timezone) |
+| `getMidnightTimestamp(timestamp)` | Returns timestamp of midnight (00:00:00.000) |
+| `getDayStorageKey(timestamp)` | Returns storage key `day_YYYY-MM-DD` |
+
+All date operations use **local timezone** to match user expectations.
 
 ---
 
@@ -263,19 +392,21 @@ sequenceDiagram
 
 | Phase | Location | Data | Description |
 |-------|----------|------|-------------|
-| **Active** | Memory + Storage | `ActiveSession` | Currently tracking session with `startTime` |
-| **Completed** | Storage | `Session` | Finished session with calculated `duration` |
-| **Aggregated** | Storage | `DomainData` | Accumulated stats per domain |
+| **Active** | Memory + Storage | `ActiveTab` | Currently tracking domain with accumulated `totalTime` |
+| **Recorded** | Storage | `Day.hours[h].domains[d]` | Hour-level time aggregation |
+| **Aggregated** | Storage | `Day.domains[d]` | Day-level time aggregation |
+| **Historical** | Storage | `History.days` | Multi-day tracking with retention |
 | **Displayed** | UI | `SessionState` | Current elapsed time for display |
 
 ---
 
 ## Timing Precision
 
-- **startTime**: Uses `performance.now()` for sub-millisecond precision
-- **duration**: Calculated as `endTime - startTime`
+- **lastTimerCheck**: Uses `Date.now()` for checkpoint tracking
+- **totalTime**: Calculated as `totalTime + (now - lastTimerCheck)` when active
 - **currentTime**: Updated via `requestAnimationFrame` in TimeDisplayPill
-- **dailyStats**: Keyed by ISO date string (`YYYY-MM-DD`)
+- **Day records**: Keyed by ISO date string (`YYYY-MM-DD`)
+- **Hour records**: Indexed 0-23 within each Day
 
 ---
 
@@ -291,11 +422,11 @@ flowchart LR
     end
 
     subgraph Storage["browser.storage.local"]
-        domains["domains"]
-        activeSession["activeSession"]
+        activeTab["activeTab"]
+        dayRecord["day_YYYY-MM-DD"]
     end
 
     useEffect -->|"storage.get()"| Storage
-    Storage -->|"DomainData"| state
-    activeSession -->|"ActiveSession"| state
+    dayRecord -->|"Day.totalTime"| state
+    activeTab -->|"ActiveTab"| state
 ```

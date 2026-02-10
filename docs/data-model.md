@@ -1,4 +1,5 @@
 ### Schemas:
+```
 activeTab {
     domain: string
     totalTime: int
@@ -73,7 +74,7 @@ Aggregations:
     - domains
         - totalTime
         - activationsCount
-
+```
 ### Key Lifecycle Events:
 - TabEnter
 - TabExit
@@ -84,6 +85,7 @@ Aggregations:
 - Clear expired days
 
 ### Dataflow:
+```
 - TabEnter
     ActiveTab:
         domain -> tab domain
@@ -173,3 +175,4 @@ Aggregations:
     - track a setInterval to get the delta for  what a time would have been vs what the time is now to use in calculations
     - keep track of the time shift for the day (for logging), and reset when dayElapses
 - make sure dayElapsed is set to occur at the device's timezone's 00:00
+```
