@@ -1,5 +1,6 @@
 import { type FunctionComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
+import type { ActiveTab, Day, History, ExtensionSettings } from "../../types";
 
 interface SessionData {
   domain: string;
@@ -10,11 +11,10 @@ interface SessionData {
 }
 
 interface StorageData {
-  domains: Record<string, any>;
-  activeSession: any;
-  settings: any;
-  version: number;
-  installDate: number;
+  activeTab: ActiveTab | null;
+  todayData: Day | null;
+  history: History | null;
+  settings: ExtensionSettings | null;
 }
 
 interface PopupState {
@@ -27,10 +27,10 @@ interface PopupState {
 }
 
 /**
- * Format nanoseconds to HH:MM:SS display string
+ * Format milliseconds to HH:MM:SS display string
  */
-function formatTime(nanoseconds: number): string {
-  const totalSeconds = Math.floor(nanoseconds / 1000_000);
+function formatTime(milliseconds: number): string {
+  const totalSeconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -58,43 +58,44 @@ export const App: FunctionComponent = () => {
   useEffect(() => {
     async function loadData(): Promise<void> {
       try {
-        // Get current tab to determine domain
-        const [activeTab] = await browser.tabs.query({
+        // Get current browser tab to determine domain
+        const [browserTab] = await browser.tabs.query({
           active: true,
           currentWindow: true,
         });
-        const currentDomain = activeTab?.url
-          ? new URL(activeTab.url).hostname
+        const currentDomain = browserTab?.url
+          ? new URL(browserTab.url).hostname
           : null;
 
         // Get all storage data
         const data = await browser.storage.local.get(null);
-        const domains = data.domains || {};
-        const activeSession = data.activeSession;
-
-        // Calculate today's total from all domains
+        const activeTab = data.activeTab as ActiveTab | null;
         const todayKey = getTodayKey();
-        let todayTotal = 0;
-        for (const domainData of Object.values(domains)) {
-          const daily = (domainData as any).dailyStats?.[todayKey] || 0;
-          todayTotal += daily;
+        const todayData = data[`day_${todayKey}`] as Day | null;
+        const history = data.history as History | null;
+
+        // Calculate today's total from day record
+        let todayTotal = todayData?.totalTime ?? 0;
+        // If active session exists, add elapsed time since last checkpoint
+        if (activeTab?.active) {
+          todayTotal += Date.now() - activeTab.lastTimerCheck;
         }
 
         // Get current session data if active and matches current tab
         let currentSession: SessionData | null = null;
-        if (
-          activeSession &&
-          currentDomain &&
-          activeSession.domain === currentDomain
-        ) {
-          const elapsed = Date.now() - activeSession.startTime;
-          console.log(elapsed);
+        if (activeTab && currentDomain && activeTab.domain === currentDomain) {
+          // Calculate display time: totalTime + elapsed if actively tracking
+          const elapsed = activeTab.active
+            ? Date.now() - activeTab.lastTimerCheck
+            : 0;
+          const displayTime = activeTab.totalTime + elapsed;
+
           currentSession = {
-            domain: activeSession.domain,
-            currentTime: elapsed,
-            isActive: !activeSession.isPaused,
-            isPaused: activeSession.isPaused || false,
-            startTime: activeSession.startTime,
+            domain: activeTab.domain,
+            currentTime: displayTime,
+            isActive: activeTab.active,
+            isPaused: !activeTab.active,
+            startTime: activeTab.lastActivated,
           };
         }
 
@@ -105,11 +106,10 @@ export const App: FunctionComponent = () => {
           loading: false,
           error: null,
           storageData: {
-            domains: data.domains || {},
-            activeSession: data.activeSession || null,
-            settings: data.settings || {},
-            version: data.version || 0,
-            installDate: data.installDate || 0,
+            activeTab: activeTab,
+            todayData: todayData,
+            history: history,
+            settings: (data.settings as ExtensionSettings) || null,
           },
         }));
       } catch (error) {
@@ -175,12 +175,7 @@ export const App: FunctionComponent = () => {
 
       <section class="today-total">
         <h2>Today's Total</h2>
-        <div class="time-display total">
-          {
-            // todayTotal's units are millis, formatTime units are nanos
-            formatTime(state.todayTotal * 1000)
-          }
-        </div>
+        <div class="time-display total">{formatTime(state.todayTotal)}</div>
       </section>
 
       <div class="divider" />
@@ -193,36 +188,25 @@ export const App: FunctionComponent = () => {
         {state.showDebug && state.storageData && (
           <div class="debug-data">
             <div class="debug-item">
-              <h3>Active Session</h3>
+              <h3>Active Tab</h3>
               <pre>
-                {JSON.stringify(state.storageData.activeSession, null, 2)}
+                {JSON.stringify(state.storageData.activeTab, null, 2)}
               </pre>
+            </div>
+
+            <div class="debug-item">
+              <h3>Today's Data</h3>
+              <pre>{JSON.stringify(state.storageData.todayData, null, 2)}</pre>
+            </div>
+
+            <div class="debug-item">
+              <h3>History</h3>
+              <pre>{JSON.stringify(state.storageData.history, null, 2)}</pre>
             </div>
 
             <div class="debug-item">
               <h3>Settings</h3>
               <pre>{JSON.stringify(state.storageData.settings, null, 2)}</pre>
-            </div>
-
-            <div class="debug-item">
-              <h3>Domains ({Object.keys(state.storageData.domains).length})</h3>
-              <pre>{JSON.stringify(state.storageData.domains, null, 2)}</pre>
-            </div>
-
-            <div class="debug-item">
-              <h3>Metadata</h3>
-              <pre>
-                {JSON.stringify(
-                  {
-                    version: state.storageData.version,
-                    installDate: state.storageData.installDate
-                      ? new Date(state.storageData.installDate).toISOString()
-                      : null,
-                  },
-                  null,
-                  2,
-                )}
-              </pre>
             </div>
           </div>
         )}
