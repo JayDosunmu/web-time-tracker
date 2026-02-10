@@ -1,6 +1,7 @@
 import { type FunctionComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
 import type { ActiveTab, Day, History, ExtensionSettings } from "../../types";
+import { getDateKey } from "../shared/dateUtils";
 
 interface SessionData {
   domain: string;
@@ -39,10 +40,15 @@ function formatTime(milliseconds: number): string {
 }
 
 /**
- * Get today's date as ISO string (YYYY-MM-DD)
+ * Get default settings (matches SettingsRepository.getDefaultSettings)
  */
-function getTodayKey(): string {
-  return new Date().toISOString().split("T")[0];
+function getDefaultSettings(): ExtensionSettings {
+  return {
+    pillPosition: { x: 9999, y: 20 },
+    pillVisibility: true,
+    dataRetentionDays: 30,
+    excludedDomains: [],
+  };
 }
 
 export const App: FunctionComponent = () => {
@@ -70,7 +76,7 @@ export const App: FunctionComponent = () => {
         // Get all storage data
         const data = await browser.storage.local.get(null);
         const activeTab = data.activeTab as ActiveTab | null;
-        const todayKey = getTodayKey();
+        const todayKey = getDateKey();
         const todayData = data[`day_${todayKey}`] as Day | null;
         const history = data.history as History | null;
 
@@ -109,7 +115,7 @@ export const App: FunctionComponent = () => {
             activeTab: activeTab,
             todayData: todayData,
             history: history,
-            settings: (data.settings as ExtensionSettings) || null,
+            settings: (data.settings as ExtensionSettings) ?? getDefaultSettings(),
           },
         }));
       } catch (error) {
