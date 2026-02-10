@@ -131,8 +131,8 @@ export class DataModelManager {
       // Persist to storage
       await this.tabRepository.setActiveTab(this.activeTab);
 
-      // Update domain activation count in today's record
-      await this.incrementDomainActivation(domain, timestamp);
+      // Update domain visit count in today's record
+      await this.incrementDomainVisit(domain, timestamp);
 
       console.log(`Tab entered: ${domain}, accumulated time: ${accumulatedTime}ms`);
 
@@ -376,7 +376,7 @@ export class DataModelManager {
       today.hours[hour] = { domains: {} };
     }
     if (!today.hours[hour].domains[domain]) {
-      today.hours[hour].domains[domain] = { totalTime: 0, activationsCount: 0 };
+      today.hours[hour].domains[domain] = { totalTime: 0, visitCount: 0 };
     }
     today.hours[hour].domains[domain].totalTime += elapsed;
 
@@ -384,8 +384,8 @@ export class DataModelManager {
     if (!today.domains[domain]) {
       today.domains[domain] = {
         totalTime: 0,
-        activationsCount: 0,
-        lastActivated: timestamp,
+        visitCount: 0,
+        lastVisited: timestamp,
         lastTimerCheck: timestamp,
       };
     }
@@ -403,9 +403,9 @@ export class DataModelManager {
   }
 
   /**
-   * Increment domain activation count
+   * Increment domain visit count
    */
-  private async incrementDomainActivation(domain: string, timestamp: number): Promise<void> {
+  private async incrementDomainVisit(domain: string, timestamp: number): Promise<void> {
     const dateKey = HistoryRepository.getDateKey(timestamp);
     const hour = new Date(timestamp).getHours();
 
@@ -414,20 +414,20 @@ export class DataModelManager {
       return;
     }
 
-    // Increment hour activation count
+    // Increment hour visit count
     if (today.hours[hour]?.domains[domain]) {
-      today.hours[hour].domains[domain].activationsCount++;
+      today.hours[hour].domains[domain].visitCount++;
     }
 
-    // Increment day activation count
+    // Increment day visit count
     if (today.domains[domain]) {
-      today.domains[domain].activationsCount++;
-      today.domains[domain].lastActivated = timestamp;
+      today.domains[domain].visitCount++;
+      today.domains[domain].lastVisited = timestamp;
     } else {
       today.domains[domain] = {
         totalTime: 0,
-        activationsCount: 1,
-        lastActivated: timestamp,
+        visitCount: 1,
+        lastVisited: timestamp,
         lastTimerCheck: timestamp,
       };
     }

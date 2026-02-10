@@ -104,7 +104,7 @@ flowchart LR
     subgraph Storage
         getToday["Get/Create Today's<br/>Day record"]
         createActiveTab["Create ActiveTab<br/>with accumulated time"]
-        updateDomain["Increment domain<br/>activation count"]
+        updateDomain["Increment domain<br/>visit count"]
     end
 
     subgraph Output
@@ -198,11 +198,11 @@ History (metadata)
         ├── hours[0-23]: HourData[]
         │   └── domains: Record<domain, HourDomainData>
         │       ├── totalTime
-        │       └── activationsCount
+        │       └── visitCount
         └── domains: Record<domain, DayDomainData>
             ├── totalTime
-            ├── activationsCount
-            ├── lastActivated
+            ├── visitCount
+            ├── lastVisited
             └── lastTimerCheck
 ```
 
@@ -225,7 +225,7 @@ erDiagram
         string domain
         number totalTime
         boolean active
-        number lastActivated
+        number lastVisited
         number lastTimerCheck
     }
 
@@ -253,14 +253,14 @@ erDiagram
     HOUR_DATA ||--o{ HOUR_DOMAIN_DATA : "domains[domain]"
     HOUR_DOMAIN_DATA {
         number totalTime
-        number activationsCount
+        number visitCount
     }
 
     DAY ||--o{ DAY_DOMAIN_DATA : "domains[domain]"
     DAY_DOMAIN_DATA {
         number totalTime
-        number activationsCount
-        number lastActivated
+        number visitCount
+        number lastVisited
         number lastTimerCheck
     }
 
@@ -290,7 +290,7 @@ The `DataModelManager` handles these lifecycle events:
 
 | Event | Trigger | Action |
 |-------|---------|--------|
-| `TAB_ENTER` | User navigates to a new domain | Exit previous tab, create/restore ActiveTab for domain, increment activation count |
+| `TAB_ENTER` | User navigates to a new domain | Exit previous tab, create/restore ActiveTab for domain, increment visit count |
 | `TAB_EXIT` | User leaves current domain | Record elapsed time, clear ActiveTab |
 | `HOUR_ELAPSED` | Clock crosses hour boundary | Record elapsed time to current hour, reset timer checkpoint |
 | `DAY_ELAPSED` | Clock crosses midnight | Record remaining time to yesterday, reset ActiveTab for new day, clear expired days |
