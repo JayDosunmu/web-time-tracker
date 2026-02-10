@@ -6,13 +6,18 @@
  */
 
 import type { History, Day, HourData } from "../../../types";
+import {
+  getDateKey,
+  getMidnightTimestamp,
+  DAY_STORAGE_PREFIX,
+} from "../../shared/dateUtils";
 
 type StorageArea = browser.storage.StorageArea;
 
 // Storage keys for v2 schema
 const STORAGE_KEYS = {
   HISTORY: "history",
-  DAY_PREFIX: "day_", // day_2024-02-09
+  DAY_PREFIX: DAY_STORAGE_PREFIX,
 } as const;
 
 export class HistoryRepository {
@@ -230,21 +235,17 @@ export class HistoryRepository {
 
   /**
    * Get date key from timestamp (YYYY-MM-DD format)
+   * @deprecated Use getDateKey from src/shared/dateUtils instead
    */
   static getDateKey(timestamp: number): string {
-    const date = new Date(timestamp);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return getDateKey(timestamp);
   }
 
   /**
    * Get midnight timestamp for a date (in local timezone)
+   * @deprecated Use getMidnightTimestamp from src/shared/dateUtils instead
    */
   static getMidnightTimestamp(timestamp: number): number {
-    const date = new Date(timestamp);
-    date.setHours(0, 0, 0, 0);
-    return date.getTime();
+    return getMidnightTimestamp(timestamp);
   }
 }
