@@ -98,22 +98,36 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   // Initial bounds calculation, position clamp, and resize handler
   useEffect(() => {
-    // Small delay to ensure pill is rendered and has dimensions
-    const timer = setTimeout(() => {
-      updateBoundsAndPosition();
-      // Also clamp the initial position prop
+    // Use requestAnimationFrame to ensure element is rendered and has dimensions
+    let rafId: number | null = null;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    const initializePosition = (): void => {
       if (pillRef.current) {
         const rect = pillRef.current.getBoundingClientRect();
-        const clamped = clampPosition(position.x, position.y, rect.width, rect.height);
-        setClampedPosition(clamped);
-        // Signal that position is now ready (clamped to viewport)
-        onPositionReady();
+        if (rect.width > 0 && rect.height > 0) {
+          updateBoundsAndPosition();
+          const clamped = clampPosition(position.x, position.y, rect.width, rect.height);
+          setClampedPosition(clamped);
+          onPositionReady();
+          return;
+        }
       }
-    }, 10);
+      // Retry if element not ready yet
+      attempts++;
+      if (attempts < maxAttempts) {
+        rafId = requestAnimationFrame(initializePosition);
+      }
+    };
+
+    rafId = requestAnimationFrame(initializePosition);
 
     window.addEventListener('resize', updateBoundsAndPosition);
     return () => {
-      clearTimeout(timer);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       window.removeEventListener('resize', updateBoundsAndPosition);
     };
   }, [updateBoundsAndPosition, position.x, position.y, onPositionReady]);
