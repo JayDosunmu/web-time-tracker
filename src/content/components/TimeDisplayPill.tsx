@@ -55,9 +55,7 @@ interface PillProps {
   position: PillPosition;
   visible: boolean;
   isConnecting: boolean;
-  positionReady: boolean;
   onPositionChange: (position: PillPosition) => void;
-  onPositionReady: () => void;
 }
 
 export const Pill: FunctionComponent<PillProps> = ({
@@ -65,9 +63,7 @@ export const Pill: FunctionComponent<PillProps> = ({
   position,
   visible,
   isConnecting,
-  positionReady,
   onPositionChange,
-  onPositionReady,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -98,39 +94,24 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   // Initial bounds calculation, position clamp, and resize handler
   useEffect(() => {
-    // Use requestAnimationFrame to ensure element is rendered and has dimensions
-    let rafId: number | null = null;
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    const initializePosition = (): void => {
-      if (pillRef.current) {
-        const rect = pillRef.current.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          updateBoundsAndPosition();
-          const clamped = clampPosition(position.x, position.y, rect.width, rect.height);
-          setClampedPosition(clamped);
-          onPositionReady();
-          return;
-        }
+    // Calculate bounds immediately if element exists
+    if (pillRef.current) {
+      const rect = pillRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        boundsRef.current = {
+          maxX: window.innerWidth - rect.width,
+          maxY: window.innerHeight - rect.height,
+        };
+        // Clamp initial position to viewport
+        setClampedPosition(clampPosition(position.x, position.y, rect.width, rect.height));
       }
-      // Retry if element not ready yet
-      attempts++;
-      if (attempts < maxAttempts) {
-        rafId = requestAnimationFrame(initializePosition);
-      }
-    };
-
-    rafId = requestAnimationFrame(initializePosition);
+    }
 
     window.addEventListener('resize', updateBoundsAndPosition);
     return () => {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
       window.removeEventListener('resize', updateBoundsAndPosition);
     };
-  }, [updateBoundsAndPosition, position.x, position.y, onPositionReady]);
+  }, [updateBoundsAndPosition, position.x, position.y]);
 
   // Drag handlers
   const handleMouseDown = (event: MouseEvent): void => {
@@ -205,8 +186,6 @@ export const Pill: FunctionComponent<PillProps> = ({
   const positionStyle = {
     left: `${clampedPosition.x}px`,
     top: `${clampedPosition.y}px`,
-    // Hide until position is clamped to prevent visual glitch
-    visibility: positionReady ? 'visible' : 'hidden',
   } as const;
 
   // Show connecting state while waiting for background service
@@ -268,7 +247,6 @@ export class TimeDisplayPill {
     position: PillPosition;
     visible: boolean;
     isConnecting: boolean;
-    positionReady: boolean;
   };
   private onPositionChangeCallback: ((position: PillPosition) => void) | null = null;
   private animationFrameId: number | null = null;
@@ -281,7 +259,6 @@ export class TimeDisplayPill {
       position: initialPosition ?? { x: 9999, y: 20 },
       visible: true,
       isConnecting: true,
-      positionReady: false,
     };
     this.mount();
   }
@@ -399,13 +376,6 @@ export class TimeDisplayPill {
     }
   };
 
-  private handlePositionReady = (): void => {
-    if (!this.state.positionReady) {
-      this.state.positionReady = true;
-      this.renderComponent();
-    }
-  };
-
   private mount(): void {
     // Remove any existing pill (handles extension reload, HMR, re-injection)
     const existing = document.getElementById('web-time-tracker-pill');
@@ -440,9 +410,7 @@ export class TimeDisplayPill {
         position={this.state.position}
         visible={this.state.visible}
         isConnecting={this.state.isConnecting}
-        positionReady={this.state.positionReady}
         onPositionChange={this.handlePositionChange}
-        onPositionReady={this.handlePositionReady}
       />,
       this.container,
     );
