@@ -61,7 +61,7 @@ sequenceDiagram
     DMM->>TR: setActiveTab(activeTab)
     TR->>Storage: set({ activeTab })
 
-    DMM->>DMM: Increment domain activation count
+    DMM->>DMM: Increment domain visit count
     DMM->>HR: setDay(dateKey, updatedDay)
     HR->>Storage: set({ day_YYYY-MM-DD: updatedDay })
 

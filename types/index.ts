@@ -98,7 +98,7 @@ export interface ActiveTab {
  */
 export interface HourDomainData {
   totalTime: number; // ms
-  activationsCount: number;
+  visitCount: number;
 }
 
 /**
@@ -113,8 +113,8 @@ export interface HourData {
  */
 export interface DayDomainData {
   totalTime: number; // ms
-  activationsCount: number;
-  lastActivated: number; // timestamp
+  visitCount: number;
+  lastVisited: number; // timestamp
   lastTimerCheck: number; // timestamp
 }
 

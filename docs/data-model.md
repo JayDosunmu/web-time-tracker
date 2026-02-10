@@ -4,7 +4,7 @@ activeTab {
     domain: string
     totalTime: int
     active: bool
-    lastActivated: int // used to show time when a domain became active
+    lastVisited: int // used to show time when a domain became active
     lastTimerCheck: timestamp // handles checkpoints when hours/days elapse
 }
 
@@ -25,8 +25,8 @@ Day {
     domains: {
         [domain]: {
             totalTime: int
-            activationsCount: int
-            lastActivated: timestamp
+            visitCount: int
+            lastVisited: timestamp
             lastTimerCheck: timestamp
         }
     }
@@ -40,7 +40,7 @@ Hour {
     domains: {
         [domain]: {
             totalTime: int
-            activationsCount: int
+            visitCount: int
         }
     }
 }
@@ -49,8 +49,8 @@ Hour {
 activeDomains {
     [domain]: {
         totalTime: int
-        activationsCount: int
-        lastActivated: timestamp
+        visitCount: int
+        lastVisited: timestamp
         lastTimerCheck: timestamp
     }
 }
@@ -58,22 +58,22 @@ activeDomains {
 Aggregations:
 - Domain
     - totalTime
-    - activationsCount
+    - visitCount
 - Hour
     - totalTime (across all domains)
     - domains
         - totalTime
-        - activationsCount
+        - visitCount
 - Day
     - totalTime (across all domains)
     - domains
         - totalTime
-        - activationsCount
+        - visitCount
 - 30 day history
     - totalTime (across all domains and days)
     - domains
         - totalTime
-        - activationsCount
+        - visitCount
 ```
 ### Key Lifecycle Events:
 - TabEnter
@@ -90,7 +90,7 @@ Aggregations:
     ActiveTab:
         domain -> tab domain
         active -> true
-        lastActivated -> now
+        lastVisited -> now
         lastTimerCheck -> now
     History:
         days:
@@ -100,11 +100,11 @@ Aggregations:
                 hours[now's hour]:
                     domains[tab domain]:
                         totalTime -> 0 if domain is new
-                        activationsCount -> 1 if domains new, +1 otherwise
+                        visitCount -> 1 if domains new, +1 otherwise
                 domains[tab domain]:
                     totalTime -> 0 if domain is new
-                    lastActivated -> now
-                    activationsCount -> 1 if domains new, +1 otherwise
+                    lastVisited -> now
+                    visitCount -> 1 if domains new, +1 otherwise
                     lastTimerCheck -> now
 
 - TabExit

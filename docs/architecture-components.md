@@ -80,7 +80,7 @@ graph TB
 | Component | File | Purpose |
 |-----------|------|---------|
 | **HistoryRepository** | [src/background/repositories/HistoryRepository.ts](../src/background/repositories/HistoryRepository.ts) | Data access for History, Day, and Hour records. Manages per-day storage keys (`day_YYYY-MM-DD`), hour-level aggregations, and data retention cleanup |
-| **TabRepository** | [src/background/repositories/TabRepository.ts](../src/background/repositories/TabRepository.ts) | Data access for ActiveTab state. Manages the currently tracked domain with totalTime, activation timestamps, and timer checkpoints |
+| **TabRepository** | [src/background/repositories/TabRepository.ts](../src/background/repositories/TabRepository.ts) | Data access for ActiveTab state. Manages the currently tracked domain with totalTime, visit timestamps, and timer checkpoints |
 | **SettingsRepository** | [src/background/repositories/SettingsRepository.ts](../src/background/repositories/SettingsRepository.ts) | Data access for ExtensionSettings. Manages user preferences including pill position, visibility, retention days, and excluded domains |
 | **StorageManager** | [src/background/models/StorageManager.ts](../src/background/models/StorageManager.ts) | Generic type-safe abstraction over `browser.storage.local` used by repositories |
 
@@ -418,7 +418,7 @@ interface ActiveTab {
 
 interface HourDomainData {
   totalTime: number;       // ms
-  activationsCount: number;
+  visitCount: number;
 }
 
 interface HourData {
@@ -427,8 +427,8 @@ interface HourData {
 
 interface DayDomainData {
   totalTime: number;       // ms
-  activationsCount: number;
-  lastActivated: number;   // timestamp
+  visitCount: number;
+  lastVisited: number;     // timestamp
   lastTimerCheck: number;  // timestamp
 }
 
