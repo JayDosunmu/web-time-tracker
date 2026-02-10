@@ -55,7 +55,9 @@ interface PillProps {
   position: PillPosition;
   visible: boolean;
   isConnecting: boolean;
+  positionReady: boolean;
   onPositionChange: (position: PillPosition) => void;
+  onPositionReady: () => void;
 }
 
 export const Pill: FunctionComponent<PillProps> = ({
@@ -63,7 +65,9 @@ export const Pill: FunctionComponent<PillProps> = ({
   position,
   visible,
   isConnecting,
+  positionReady,
   onPositionChange,
+  onPositionReady,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -102,6 +106,8 @@ export const Pill: FunctionComponent<PillProps> = ({
         const rect = pillRef.current.getBoundingClientRect();
         const clamped = clampPosition(position.x, position.y, rect.width, rect.height);
         setClampedPosition(clamped);
+        // Signal that position is now ready (clamped to viewport)
+        onPositionReady();
       }
     }, 10);
 
@@ -110,7 +116,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       clearTimeout(timer);
       window.removeEventListener('resize', updateBoundsAndPosition);
     };
-  }, [updateBoundsAndPosition, position.x, position.y]);
+  }, [updateBoundsAndPosition, position.x, position.y, onPositionReady]);
 
   // Drag handlers
   const handleMouseDown = (event: MouseEvent): void => {
@@ -185,7 +191,9 @@ export const Pill: FunctionComponent<PillProps> = ({
   const positionStyle = {
     left: `${clampedPosition.x}px`,
     top: `${clampedPosition.y}px`,
-  };
+    // Hide until position is clamped to prevent visual glitch
+    visibility: positionReady ? 'visible' : 'hidden',
+  } as const;
 
   // Show connecting state while waiting for background service
   if (isConnecting && !sessionState) {
@@ -246,18 +254,20 @@ export class TimeDisplayPill {
     position: PillPosition;
     visible: boolean;
     isConnecting: boolean;
+    positionReady: boolean;
   };
   private onPositionChangeCallback: ((position: PillPosition) => void) | null = null;
   private animationFrameId: number | null = null;
   private lastUpdateTime = 0;
 
-  constructor() {
+  constructor(initialPosition?: PillPosition) {
     this.state = {
       sessionState: null,
-      // Default to top-right (will be clamped to actual viewport)
-      position: { x: 9999, y: 20 },
+      // Use provided position or default to top-right (will be clamped to actual viewport)
+      position: initialPosition ?? { x: 9999, y: 20 },
       visible: true,
       isConnecting: true,
+      positionReady: false,
     };
     this.mount();
   }
@@ -375,6 +385,13 @@ export class TimeDisplayPill {
     }
   };
 
+  private handlePositionReady = (): void => {
+    if (!this.state.positionReady) {
+      this.state.positionReady = true;
+      this.renderComponent();
+    }
+  };
+
   private mount(): void {
     // Remove any existing pill (handles extension reload, HMR, re-injection)
     const existing = document.getElementById('web-time-tracker-pill');
@@ -409,7 +426,9 @@ export class TimeDisplayPill {
         position={this.state.position}
         visible={this.state.visible}
         isConnecting={this.state.isConnecting}
+        positionReady={this.state.positionReady}
         onPositionChange={this.handlePositionChange}
+        onPositionReady={this.handlePositionReady}
       />,
       this.container,
     );

@@ -1,15 +1,12 @@
 /**
- * Comprehensive tests for StorageManager
+ * Comprehensive tests for StorageManager (Pure Generic CRUD Layer)
+ *
+ * StorageManager is now a pure generic CRUD abstraction.
+ * Domain-specific operations are handled by repositories.
  */
 
 import browser from "sinon-chrome";
 
-import {
-  mockStorageSchema,
-  mockDomainData,
-  mockActiveSession,
-  mockExtensionSettings,
-} from "../../../tests/fixtures";
 import { StorageManager } from "./StorageManager";
 import { testUtils } from "../../../tests/utils";
 
@@ -22,7 +19,7 @@ describe("StorageManager", () => {
     testUtils.resetAll();
     StorageManager.resetInstance();
     storageManager = StorageManager.getInstance(
-      browser.storage.local as unknown as chrome.storage.StorageArea,
+      browser.storage.local as unknown as chrome.storage.StorageArea
     );
   });
 
@@ -32,53 +29,124 @@ describe("StorageManager", () => {
       const instance2 = StorageManager.getInstance();
       expect(instance1).toBe(instance2);
     });
+
+    it("should reset instance for testing", () => {
+      const instance1 = StorageManager.getInstance();
+      StorageManager.resetInstance();
+      const instance2 = StorageManager.getInstance(
+        browser.storage.local as unknown as chrome.storage.StorageArea
+      );
+      expect(instance1).not.toBe(instance2);
+    });
+
+    it("should throw error when getting instance without storage on first call", () => {
+      StorageManager.resetInstance();
+      expect(() => StorageManager.getInstance()).toThrow(
+        "StorageManager must be initialized with storage parameter on first call"
+      );
+    });
+  });
+
+  describe("Storage Access", () => {
+    it("should expose underlying storage area", () => {
+      const storage = storageManager.getStorage();
+      // sinon-chrome creates proxies, so we verify by checking key methods exist
+      expect(storage.get).toBeDefined();
+      expect(storage.set).toBeDefined();
+      expect(storage.remove).toBeDefined();
+      expect(storage.clear).toBeDefined();
+    });
   });
 
   describe("Basic Storage Operations", () => {
-    it("should set data with type safety", async () => {
-      const testData = { domains: mockStorageSchema.domains };
+    it("should set data", async () => {
+      const testData = { testKey: "testValue" };
 
-      // Call StorageManager.set()
       await storageManager.set(testData);
 
-      // State assertion: verify the stateful storage contains the data
-      const storedData = await browser.storage.local.get(["domains"]);
-      expect(storedData.domains).toEqual(mockStorageSchema.domains);
+      const storedData = await browser.storage.local.get(["testKey"]);
+      expect(storedData.testKey).toBe("testValue");
     });
 
-    it("should get data with type safety", async () => {
-      await browser.storage.local.set({ domains: mockStorageSchema.domains });
+    it("should set complex data structures", async () => {
+      const complexData = {
+        nested: { deep: { value: 123 } },
+        array: [1, 2, 3],
+        mixed: { items: ["a", "b"], count: 2 },
+      };
 
-      const result = await storageManager.get(["domains"]);
+      await storageManager.set(complexData);
 
-      expect(result.domains).toEqual(mockStorageSchema.domains);
+      const storedData = await browser.storage.local.get([
+        "nested",
+        "array",
+        "mixed",
+      ]);
+      expect(storedData.nested).toEqual({ deep: { value: 123 } });
+      expect(storedData.array).toEqual([1, 2, 3]);
+      expect(storedData.mixed).toEqual({ items: ["a", "b"], count: 2 });
     });
 
-    it("should get multiple keys", async () => {
+    it("should get data by single key", async () => {
+      await browser.storage.local.set({ myKey: "myValue" });
+
+      const result = await storageManager.get("myKey");
+
+      expect(result.myKey).toBe("myValue");
+    });
+
+    it("should get data by multiple keys", async () => {
       await browser.storage.local.set({
-        domains: mockStorageSchema.domains,
-        version: mockStorageSchema.version,
+        key1: "value1",
+        key2: "value2",
+        key3: "value3",
       });
 
-      const result = await storageManager.get(["domains", "version"]);
+      const result = await storageManager.get(["key1", "key2"]);
 
-      expect(result.domains).toEqual(mockStorageSchema.domains);
-      expect(result.version).toBe(mockStorageSchema.version);
+      expect(result.key1).toBe("value1");
+      expect(result.key2).toBe("value2");
+      expect(result.key3).toBeUndefined();
     });
 
-    it("should remove data", async () => {
-      await browser.storage.local.set({ domains: mockStorageSchema.domains });
+    it("should return empty object for non-existent keys", async () => {
+      const result = await storageManager.get("nonExistentKey");
 
-      await storageManager.remove(["domains"]);
+      expect(result.nonExistentKey).toBeUndefined();
+    });
 
-      const result = await browser.storage.local.get(["domains"]);
-      expect(result.domains).toBeUndefined();
+    it("should remove data by single key", async () => {
+      await browser.storage.local.set({ toRemove: "value" });
+
+      await storageManager.remove("toRemove");
+
+      const result = await browser.storage.local.get(["toRemove"]);
+      expect(result.toRemove).toBeUndefined();
+    });
+
+    it("should remove data by multiple keys", async () => {
+      await browser.storage.local.set({
+        remove1: "value1",
+        remove2: "value2",
+        keep: "value3",
+      });
+
+      await storageManager.remove(["remove1", "remove2"]);
+
+      const result = await browser.storage.local.get([
+        "remove1",
+        "remove2",
+        "keep",
+      ]);
+      expect(result.remove1).toBeUndefined();
+      expect(result.remove2).toBeUndefined();
+      expect(result.keep).toBe("value3");
     });
 
     it("should clear all data", async () => {
       await browser.storage.local.set({
-        domains: mockStorageSchema.domains,
-        version: 1,
+        data1: "value1",
+        data2: "value2",
       });
 
       await storageManager.clear();
@@ -86,317 +154,83 @@ describe("StorageManager", () => {
       const result = await browser.storage.local.get();
       expect(result).toEqual({});
     });
-
-    it("should handle storage errors gracefully", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.get as any).callsFake(async () => {
-        throw new Error("Storage error");
-      });
-
-      await expect(storageManager.get(["domains"])).rejects.toThrow(
-        "Failed to get storage data",
-      );
-    });
   });
 
-  describe("Complete Schema Operations", () => {
-    it("should get complete schema with defaults", async () => {
-      const result = await storageManager.getAll();
-
-      expect(result).toEqual({
-        domains: {},
-        activeSession: null,
-        settings: {
-          pillPosition: { x: 9999, y: 20 },
-          pillVisibility: true,
-          dataRetentionDays: 30,
-          excludedDomains: [],
-        },
-        version: 1,
-        installDate: expect.any(Number),
-      });
-    });
-
-    it("should get existing schema data", async () => {
-      await browser.storage.local.set(mockStorageSchema);
-
-      const result = await storageManager.getAll();
-
-      expect(result).toEqual(mockStorageSchema);
-    });
-
-    it("should initialize storage with defaults", async () => {
-      await storageManager.initialize();
-
-      const result = await browser.storage.local.get([
-        "version",
-        "installDate",
-        "settings",
-      ]);
-
-      expect(result.version).toBe(1);
-      expect(result.installDate).toEqual(expect.any(Number));
-      expect(result.settings).toEqual({
-        pillPosition: { x: 9999, y: 20 },
-        pillVisibility: true,
-        dataRetentionDays: 30,
-        excludedDomains: [],
-      });
-    });
-
-    it("should not overwrite existing data during initialization", async () => {
-      const existingData = {
-        version: 2,
-        installDate: 1640995200000,
-        settings: mockExtensionSettings,
+  describe("Get All Operations", () => {
+    it("should get all stored data", async () => {
+      const testData = {
+        key1: "value1",
+        key2: { nested: true },
+        key3: [1, 2, 3],
       };
-      await browser.storage.local.set(existingData);
+      await browser.storage.local.set(testData);
 
-      await storageManager.initialize();
+      const result = await storageManager.getAll();
 
-      const result = await browser.storage.local.get([
-        "version",
-        "installDate",
-        "settings",
-      ]);
-      expect(result).toEqual(existingData);
-    });
-  });
-
-  describe("Domain Data Operations", () => {
-    it("should get existing domain data", async () => {
-      await browser.storage.local.set({
-        domains: { "example.com": mockDomainData },
-      });
-
-      const result = await storageManager.getDomainData("example.com");
-
-      expect(result).toEqual(mockDomainData);
+      expect(result).toEqual(testData);
     });
 
-    it("should return empty domain data for non-existent domain", async () => {
-      const result = await storageManager.getDomainData("nonexistent.com");
+    it("should return empty object when storage is empty", async () => {
+      const result = await storageManager.getAll();
 
-      expect(result).toEqual({
-        totalTime: 0,
-        sessions: [],
-        dailyStats: {},
-        lastAccessed: expect.any(Number),
-      });
-    });
-
-    it("should update domain data atomically", async () => {
-      const initialDomains = { "example.com": mockDomainData };
-      await browser.storage.local.set({ domains: initialDomains });
-
-      const updates = { totalTime: 7200000 };
-      await storageManager.updateDomainData("example.com", updates);
-
-      const result = await browser.storage.local.get(["domains"]);
-      expect(result.domains!["example.com"].totalTime).toBe(7200000);
-      expect(result.domains!["example.com"].lastAccessed).toEqual(
-        expect.any(Number),
-      );
-    });
-
-    it("should create new domain data when updating non-existent domain", async () => {
-      const updates = { totalTime: 3600000 };
-
-      await storageManager.updateDomainData("newdomain.com", updates);
-
-      const result = await browser.storage.local.get(["domains"]);
-      expect(result.domains!["newdomain.com"]).toEqual({
-        totalTime: 3600000,
-        sessions: [],
-        dailyStats: {},
-        lastAccessed: expect.any(Number),
-      });
-    });
-
-    it("should handle domain data errors gracefully", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.get as any).callsFake(async () => {
-        throw new Error("Storage error");
-      });
-
-      const result = await storageManager.getDomainData("example.com");
-
-      expect(result).toEqual({
-        totalTime: 0,
-        sessions: [],
-        dailyStats: {},
-        lastAccessed: expect.any(Number),
-      });
-    });
-  });
-
-  describe("Active Session Operations", () => {
-    it("should get active session", async () => {
-      await browser.storage.local.set({ activeSession: mockActiveSession });
-
-      const result = await storageManager.getActiveSession();
-
-      expect(result).toEqual(mockActiveSession);
-    });
-
-    it("should return null for no active session", async () => {
-      const result = await storageManager.getActiveSession();
-
-      expect(result).toBeNull();
-    });
-
-    it("should set active session", async () => {
-      await storageManager.setActiveSession(mockActiveSession);
-
-      const result = await browser.storage.local.get(["activeSession"]);
-      expect(result.activeSession).toEqual(mockActiveSession);
-    });
-
-    it("should set active session to null", async () => {
-      await browser.storage.local.set({ activeSession: mockActiveSession });
-
-      await storageManager.setActiveSession(null);
-
-      const result = await browser.storage.local.get(["activeSession"]);
-      expect(result.activeSession).toBeNull();
-    });
-
-    it("should handle active session errors gracefully", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.get as any).callsFake(async () => {
-        throw new Error("Storage error");
-      });
-
-      const result = await storageManager.getActiveSession();
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("Settings Operations", () => {
-    it("should get existing settings", async () => {
-      await browser.storage.local.set({ settings: mockExtensionSettings });
-
-      const result = await storageManager.getSettings();
-
-      expect(result).toEqual(mockExtensionSettings);
-    });
-
-    it("should return default settings when none exist", async () => {
-      const result = await storageManager.getSettings();
-
-      expect(result).toEqual({
-        pillPosition: { x: 9999, y: 20 },
-        pillVisibility: true,
-        dataRetentionDays: 30,
-        excludedDomains: [],
-      });
-    });
-
-    it("should update settings partially", async () => {
-      await browser.storage.local.set({ settings: mockExtensionSettings });
-
-      const updates = { pillPosition: { x: 50, y: 100 } };
-      await storageManager.updateSettings(updates);
-
-      const result = await browser.storage.local.get(["settings"]);
-      expect(result.settings).toEqual({
-        ...mockExtensionSettings,
-        pillPosition: { x: 50, y: 100 },
-      });
-    });
-
-    it("should update settings on fresh installation", async () => {
-      const updates = { dataRetentionDays: 60 };
-
-      await storageManager.updateSettings(updates);
-
-      const result = await browser.storage.local.get(["settings"]);
-      expect(result.settings.dataRetentionDays).toEqual(60);
-    });
-
-    it("should handle settings errors gracefully", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.get as any).callsFake(async () => {
-        throw new Error("Storage error");
-      });
-
-      const result = await storageManager.getSettings();
-
-      expect(result).toEqual({
-        pillPosition: { x: 9999, y: 20 },
-        pillVisibility: true,
-        dataRetentionDays: 30,
-        excludedDomains: [],
-      });
+      expect(result).toEqual({});
     });
   });
 
   describe("Error Handling", () => {
+    it("should handle get operation errors", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (browser.storage.local.get as any).callsFake(async () => {
+        throw new Error("Storage read error");
+      });
+
+      await expect(storageManager.get("anyKey")).rejects.toThrow(
+        "Failed to get storage data"
+      );
+    });
+
     it("should handle set operation errors", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.set as any).callsFake(async () => {
         throw new Error("Storage full");
       });
 
-      await expect(storageManager.set({ version: 2 })).rejects.toThrow(
-        "Failed to set storage data",
+      await expect(storageManager.set({ key: "value" })).rejects.toThrow(
+        "Failed to set storage data"
       );
     });
 
     it("should handle remove operation errors", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.remove as any).callsFake(async () => {
-        throw new Error("Storage error");
+        throw new Error("Remove failed");
       });
 
-      await expect(storageManager.remove(["domains"])).rejects.toThrow(
-        "Failed to remove storage data",
+      await expect(storageManager.remove("anyKey")).rejects.toThrow(
+        "Failed to remove storage data"
       );
     });
 
     it("should handle clear operation errors", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (browser.storage.local.clear as any).callsFake(async () => {
-        throw new Error("Storage error");
+        throw new Error("Clear failed");
       });
 
       await expect(storageManager.clear()).rejects.toThrow(
-        "Failed to clear storage data",
+        "Failed to clear storage data"
       );
     });
 
-    it("should handle updateDomainData errors", async () => {
+    it("should handle getAll operation errors", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.set as any).callsFake(async () => {
+      (browser.storage.local.get as any).callsFake(async () => {
         throw new Error("Storage error");
       });
 
-      await expect(
-        storageManager.updateDomainData("example.com", { totalTime: 1000 }),
-      ).rejects.toThrow("Failed to update domain data for example.com");
-    });
-
-    it("should handle setActiveSession errors", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.set as any).callsFake(async () => {
-        throw new Error("Storage error");
-      });
-
-      await expect(
-        storageManager.setActiveSession(mockActiveSession),
-      ).rejects.toThrow("Failed to set active session");
-    });
-
-    it("should handle updateSettings errors", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (browser.storage.local.set as any).callsFake(async () => {
-        throw new Error("Storage error");
-      });
-
-      await expect(
-        storageManager.updateSettings({ pillVisibility: false }),
-      ).rejects.toThrow("Failed to update settings");
+      await expect(storageManager.getAll()).rejects.toThrow(
+        "Failed to get all storage data"
+      );
     });
   });
 });
