@@ -195,6 +195,12 @@ export class ContentScriptManager {
           // Broadcast to all registered components
           this.broadcastToComponents("onSessionUpdate", message.payload);
 
+          // Pull fresh settings on tab activation to sync pill position
+          const settings = await this.requestSettings();
+          if (settings) {
+            this.broadcastToComponents("onSettingsChange", settings);
+          }
+
           return { success: true };
         } catch (error) {
           console.error(
@@ -331,13 +337,23 @@ export class ContentScriptManager {
    */
   private async handlePositionChange(position: PillPosition): Promise<void> {
     try {
+      // Validate position before saving
+      if (!position ||
+          typeof position.x !== 'number' ||
+          typeof position.y !== 'number' ||
+          !Number.isFinite(position.x) ||
+          !Number.isFinite(position.y)) {
+        console.error('Invalid pill position, not saving:', position);
+        return;
+      }
+
       const response = await this.messageRouter.sendMessage({
         type: "UPDATE_PILL_POSITION",
         payload: { position },
       });
 
       if (!response.success) {
-        console.error("Failed to save pill position:", response.error);
+        console.error("Failed to save pill position:", response.error || 'No response from background');
       }
     } catch (error) {
       console.error("Error saving pill position:", error);

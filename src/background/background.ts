@@ -9,7 +9,6 @@ import type {
   GetSessionStateMessage,
   SessionStateResponseMessage,
   SessionUpdateMessage,
-  SettingsChangeMessage,
   ErrorReportMessage,
   GetSettingsMessage,
   UpdatePillPositionMessage,
@@ -30,7 +29,7 @@ export class BackgroundService {
   private constructor(
     dataModelManager: DataModelManager,
     timeTracker: TimeTracker,
-    settingsRepository: SettingsRepository
+    settingsRepository: SettingsRepository,
   ) {
     this.dataModelManager = dataModelManager;
     this.timeTracker = timeTracker;
@@ -40,18 +39,18 @@ export class BackgroundService {
   public static getInstance(
     dataModelManager?: DataModelManager,
     timeTracker?: TimeTracker,
-    settingsRepository?: SettingsRepository
+    settingsRepository?: SettingsRepository,
   ): BackgroundService {
     if (!BackgroundService.instance) {
       if (!dataModelManager || !timeTracker || !settingsRepository) {
         throw new Error(
-          "DataModelManager, TimeTracker, and SettingsRepository are required for first initialization"
+          "DataModelManager, TimeTracker, and SettingsRepository are required for first initialization",
         );
       }
       BackgroundService.instance = new BackgroundService(
         dataModelManager,
         timeTracker,
-        settingsRepository
+        settingsRepository,
       );
     }
     return BackgroundService.instance;
@@ -129,46 +128,46 @@ export class BackgroundService {
   private async handleMessage(
     message: ExtensionMessageUnion,
     _sender: browser.runtime.MessageSender,
-    sendResponse: (response: MessageResponse) => void
+    sendResponse: (response: MessageResponse) => void,
   ): Promise<boolean> {
     try {
       console.log(
         `BackgroundService received message: ${message.type}`,
-        message
+        message,
       );
 
       switch (message.type) {
         case "GET_SESSION_STATE":
           await this.handleGetSessionState(
             message as GetSessionStateMessage,
-            sendResponse
+            sendResponse,
           );
           break;
 
         case "ERROR_REPORT":
           await this.handleErrorReport(
             message as ErrorReportMessage,
-            sendResponse
+            sendResponse,
           );
           break;
 
         case "GET_SETTINGS":
           await this.handleGetSettings(
             message as GetSettingsMessage,
-            sendResponse
+            sendResponse,
           );
           break;
 
         case "UPDATE_PILL_POSITION":
           await this.handleUpdatePillPosition(
             message as UpdatePillPositionMessage,
-            sendResponse
+            sendResponse,
           );
           break;
 
         default:
           console.warn(
-            `BackgroundService: Unhandled message type: ${message.type}`
+            `BackgroundService: Unhandled message type: ${message.type}`,
           );
           sendResponse({
             success: false,
@@ -194,7 +193,7 @@ export class BackgroundService {
    */
   private async handleGetSessionState(
     message: GetSessionStateMessage,
-    sendResponse: (response: MessageResponse) => void
+    sendResponse: (response: MessageResponse) => void,
   ): Promise<void> {
     try {
       const activeTab = this.dataModelManager.getActiveTab();
@@ -238,7 +237,7 @@ export class BackgroundService {
    */
   private async handleErrorReport(
     message: ErrorReportMessage,
-    sendResponse: (response: MessageResponse) => void
+    sendResponse: (response: MessageResponse) => void,
   ): Promise<void> {
     try {
       console.error(`Content script error [${message.payload.context}]:`, {
@@ -264,7 +263,7 @@ export class BackgroundService {
    */
   private async handleGetSettings(
     _message: GetSettingsMessage,
-    sendResponse: (response: MessageResponse) => void
+    sendResponse: (response: MessageResponse) => void,
   ): Promise<void> {
     try {
       const settings = await this.settingsRepository.getSettings();
@@ -287,7 +286,7 @@ export class BackgroundService {
    */
   private async handleUpdatePillPosition(
     message: UpdatePillPositionMessage,
-    sendResponse: (response: MessageResponse) => void
+    sendResponse: (response: MessageResponse) => void,
   ): Promise<void> {
     try {
       await this.settingsRepository.updateSettings({
@@ -336,56 +335,13 @@ export class BackgroundService {
               await browser.tabs.sendMessage(tab.id, updateMessage);
             } catch (error) {
               // Content script may not be loaded on this tab - this is normal
-              console.debug(
-                `Failed to send message to tab ${tab.id}:`,
-                error
-              );
+              console.debug(`Failed to send message to tab ${tab.id}:`, error);
             }
           }
         }
       }
     } catch (error) {
       console.error("BackgroundService.sendSessionUpdate error:", error);
-    }
-  }
-
-  /**
-   * Broadcast settings changes to all content scripts
-   * TODO: Integrate with settings management when popup is implemented
-   */
-  // @ts-expect-error Method will be used when popup settings are implemented
-  private async broadcastSettingsChange(): Promise<void> {
-    try {
-      const settings = await this.settingsRepository.getSettings();
-
-      const settingsMessage: Omit<SettingsChangeMessage, "id" | "timestamp"> = {
-        type: "SETTINGS_CHANGE",
-        payload: {
-          pillPosition: settings.pillPosition,
-          pillVisibility: settings.pillVisibility,
-          excludedDomains: settings.excludedDomains,
-        },
-      };
-
-      // Get all tabs to broadcast to
-      const tabs = await browser.tabs.query({});
-
-      for (const tab of tabs) {
-        if (tab.id && tab.url && this.isValidUrl(tab.url)) {
-          try {
-            await browser.tabs.sendMessage(tab.id, {
-              ...settingsMessage,
-              id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-              timestamp: Date.now(),
-            });
-          } catch (error) {
-            // Content script may not be loaded on this tab - this is normal
-            console.debug(`Failed to send settings to tab ${tab.id}:`, error);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("BackgroundService.broadcastSettingsChange error:", error);
     }
   }
 
@@ -401,12 +357,12 @@ export class BackgroundService {
 
     // Window focus change event
     browser.windows.onFocusChanged.addListener(
-      this.handleWindowFocusChanged.bind(this)
+      this.handleWindowFocusChanged.bind(this),
     );
 
     // Page navigation completion event
     browser.webNavigation.onCompleted.addListener(
-      this.handleNavigationCompleted.bind(this)
+      this.handleNavigationCompleted.bind(this),
     );
   }
 
@@ -441,7 +397,7 @@ export class BackgroundService {
       const newActiveTab = await this.timeTracker.startSession(
         domain,
         activeInfo.tabId,
-        activeInfo.windowId
+        activeInfo.windowId,
       );
 
       // Broadcast session update to content scripts
@@ -460,7 +416,7 @@ export class BackgroundService {
   private async handleTabUpdated(
     tabId: number,
     changeInfo: browser.tabs._OnUpdatedChangeInfo,
-    tab: browser.tabs.Tab
+    tab: browser.tabs.Tab,
   ): Promise<void> {
     try {
       // Only process URL changes in active tabs
@@ -489,13 +445,15 @@ export class BackgroundService {
       const newActiveTab = await this.timeTracker.startSession(
         domain,
         tabId,
-        tab.windowId!
+        tab.windowId!,
       );
 
       // Broadcast session update to content scripts
       await this.sendSessionUpdate(newActiveTab);
 
-      console.log(`URL changed - started tracking session for domain: ${domain}`);
+      console.log(
+        `URL changed - started tracking session for domain: ${domain}`,
+      );
     } catch (error) {
       console.error("BackgroundService.handleTabUpdated error:", error);
       // Continue operation despite errors
@@ -579,17 +537,20 @@ export class BackgroundService {
       const newActiveTab = await this.timeTracker.startSession(
         domain,
         details.tabId,
-        tab.windowId!
+        tab.windowId!,
       );
 
       // Broadcast session update to content scripts
       await this.sendSessionUpdate(newActiveTab);
 
       console.log(
-        `Navigation completed - started tracking session for domain: ${domain}`
+        `Navigation completed - started tracking session for domain: ${domain}`,
       );
     } catch (error) {
-      console.error("BackgroundService.handleNavigationCompleted error:", error);
+      console.error(
+        "BackgroundService.handleNavigationCompleted error:",
+        error,
+      );
       // Continue operation despite errors
     }
   }
@@ -644,7 +605,7 @@ export class BackgroundService {
     const dataModelManager = DataModelManager.getInstance(
       historyRepository,
       tabRepository,
-      settingsRepository
+      settingsRepository,
     );
 
     // Initialize TimeTracker
@@ -654,7 +615,7 @@ export class BackgroundService {
     const backgroundService = BackgroundService.getInstance(
       dataModelManager,
       timeTracker,
-      settingsRepository
+      settingsRepository,
     );
 
     await backgroundService.initialize();
