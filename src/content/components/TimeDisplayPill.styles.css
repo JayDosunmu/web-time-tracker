@@ -5,40 +5,66 @@
   color: #1a1a2e;
   padding: 4px 8px;
   border-radius: 5px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 11px;
+  border: 1px solid black;
+  font-family: "Lucida Console", 'Monaco', 'Courier New', Courier, monospace;
+  font-size: 12px;
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   user-select: none;
   opacity: 0.90;
   transition: background 0.25s ease, color 0.25s ease;
+  /* Table layout for colon alignment */
+  display: table;
+  border-collapse: collapse;
 }
 
-.pill-content::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border: 2px dashed transparent;
-  border-radius: 7px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.25s ease, border-color 0.25s ease;
+.pill-row {
+  display: table-row;
+}
+
+.label {
+  display: table-cell;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.value {
+  display: table-cell;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-left: 4px;
+  white-space: nowrap;
+}
+
+.visit-count {
+  display: table-row;
+}
+
+.visit-count-cell {
+  display: table-cell;
+  text-align: right;
+  font-size: 11px;
+  color: #64748b;
+  padding-top: 2px;
 }
 
 .pill-content.paused {
   color: #64748b;
 }
 
-.pill-content.paused::after,
-.pill-content.inactive::after {
-  border: solid;
-  border-color: #1b72e2;
-  opacity: 1;
+.pill-content.paused .label,
+.pill-content.paused .value {
+  color: #64748b;
 }
 
 .pill-content.inactive {
   color: #64748b;
   opacity: 0.8;
+}
+
+.pill-content.inactive .label,
+.pill-content.inactive .value {
+  color: #64748b;
 }
 
 .pill-content.connecting {
@@ -51,9 +77,10 @@
   color: transparent;
 }
 
-.pill-content:hover::after {
-  border-color: red;
-  opacity: 1;
+.pill-content:hover .label,
+.pill-content:hover .value,
+.pill-content:hover .visit-count-cell {
+  color: transparent;
 }
 
 .pill-content.dragging {

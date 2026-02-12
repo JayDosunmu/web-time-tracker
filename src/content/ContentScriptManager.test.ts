@@ -10,7 +10,7 @@ import { testUtils } from "../../tests/utils";
 import { ContentScriptManager } from "./ContentScriptManager";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
-import { SettingsRepository, TabRepository } from "../shared/repositories";
+import { SettingsRepository, TabRepository, HistoryRepository } from "../shared/repositories";
 import type { RefreshStateMessage } from "../../types";
 
 // Mock dependencies
@@ -24,6 +24,7 @@ describe("ContentScriptManager", () => {
   let mockTimeDisplayPill: jest.Mocked<TimeDisplayPill>;
   let mockSettingsRepository: jest.Mocked<SettingsRepository>;
   let mockTabRepository: jest.Mocked<TabRepository>;
+  let mockHistoryRepository: jest.Mocked<HistoryRepository>;
 
   const mockSettings = {
     pillPosition: { x: 100, y: 100 },
@@ -38,6 +39,21 @@ describe("ContentScriptManager", () => {
     active: true,
     lastActivated: 1000,
     lastTimerCheck: 1000,
+  };
+
+  const mockDayData = {
+    totalTime: 15000,
+    hours: [],
+    domains: {
+      "example.com": {
+        totalTime: 5000,
+        visitCount: 3,
+        lastVisited: 1000,
+        lastTimerCheck: 1000,
+      },
+    },
+    timestamp: Date.now(),
+    shiftedHours: {},
   };
 
   beforeEach(() => {
@@ -72,6 +88,12 @@ describe("ContentScriptManager", () => {
       setActiveTab: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    mockHistoryRepository = {
+      getDay: jest.fn().mockResolvedValue(mockDayData),
+      getHistory: jest.fn().mockResolvedValue({ earliest: 0, latest: 0, days: {} }),
+      setDay: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     // Mock constructors
     (MessageRouter as jest.Mock).mockImplementation(() => mockMessageRouter);
     (TimeDisplayPill as jest.Mock).mockImplementation(
@@ -83,10 +105,14 @@ describe("ContentScriptManager", () => {
     (TabRepository.getInstance as jest.Mock).mockReturnValue(
       mockTabRepository,
     );
+    (HistoryRepository.getInstance as jest.Mock).mockReturnValue(
+      mockHistoryRepository,
+    );
 
     // Reset singleton instances
     SettingsRepository.resetInstance();
     TabRepository.resetInstance();
+    HistoryRepository.resetInstance();
     ContentScriptManager.resetInstance();
     contentManager = ContentScriptManager.getInstance();
   });
@@ -330,6 +356,8 @@ describe("ContentScriptManager", () => {
       expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith({
         domain: "example.com",
         currentTime: 5000,
+        totalTimeToday: 15000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: 1000,
@@ -497,6 +525,8 @@ describe("ContentScriptManager", () => {
       expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith({
         domain: "example.com",
         currentTime: 5000,
+        totalTimeToday: 15000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: 1000,
