@@ -6,6 +6,7 @@
 import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import type { ExtensionSettings, PillPosition } from '../../../types';
+import type { PositionChangeSource } from '../../../types/messages';
 import pillStyles from './TimeDisplayPill.styles.css?inline';
 
 export type { PillPosition };
@@ -55,7 +56,7 @@ interface PillProps {
   position: PillPosition;
   visible: boolean;
   isConnecting: boolean;
-  onPositionChange: (position: PillPosition) => void;
+  onPositionChange: (position: PillPosition, source: PositionChangeSource) => void;
 }
 
 export const Pill: FunctionComponent<PillProps> = ({
@@ -72,12 +73,13 @@ export const Pill: FunctionComponent<PillProps> = ({
   const pillRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
   const boundsRef = useRef({ maxX: 0, maxY: 0 });
+  const prevPositionRef = useRef<PillPosition>(position);
 
   const isActive = sessionState?.isActive ?? false;
   const isPaused = sessionState?.isPaused ?? false;
   const displayTime = sessionState?.currentTime ?? 0;
 
-  // Update cached bounds and clamp position
+  // Update cached bounds and clamp position on window resize
   const updateBoundsAndPosition = useCallback(() => {
     if (!pillRef.current) return;
     const rect = pillRef.current.getBoundingClientRect();
@@ -86,11 +88,18 @@ export const Pill: FunctionComponent<PillProps> = ({
       maxY: window.innerHeight - rect.height,
     };
     // Clamp current position to new bounds
-    setClampedPosition(prev => ({
-      x: Math.max(0, Math.min(prev.x, boundsRef.current.maxX)),
-      y: Math.max(0, Math.min(prev.y, boundsRef.current.maxY)),
-    }));
-  }, []);
+    setClampedPosition(prev => {
+      const newPos = {
+        x: Math.max(0, Math.min(prev.x, boundsRef.current.maxX)),
+        y: Math.max(0, Math.min(prev.y, boundsRef.current.maxY)),
+      };
+      // Only save if position actually changed due to resize
+      if (newPos.x !== prev.x || newPos.y !== prev.y) {
+        setTimeout(() => onPositionChange(newPos, "window_resize"), 0);
+      }
+      return newPos;
+    });
+  }, [onPositionChange]);
 
   // Initial bounds calculation, position clamp, and resize handler
   useEffect(() => {
@@ -112,6 +121,11 @@ export const Pill: FunctionComponent<PillProps> = ({
       window.removeEventListener('resize', updateBoundsAndPosition);
     };
   }, [updateBoundsAndPosition, position.x, position.y]);
+
+  // Track external position updates (from settings push) - update ref without saving
+  useEffect(() => {
+    prevPositionRef.current = position;
+  }, [position.x, position.y]);
 
   // Drag handlers
   const handleMouseDown = (event: MouseEvent): void => {
@@ -154,7 +168,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       setIsDragging(false);
       if (dragStartRef.current) {
         // Notify parent of position change for persistence
-        onPositionChange(clampedPositionRef.current);
+        onPositionChange(clampedPositionRef.current, "user_drag");
       }
       dragStartRef.current = null;
     };
@@ -248,7 +262,7 @@ export class TimeDisplayPill {
     visible: boolean;
     isConnecting: boolean;
   };
-  private onPositionChangeCallback: ((position: PillPosition) => void) | null = null;
+  private onPositionChangeCallback: ((position: PillPosition, source: PositionChangeSource) => void) | null = null;
   private animationFrameId: number | null = null;
   private lastUpdateTime = 0;
 
@@ -266,7 +280,7 @@ export class TimeDisplayPill {
   /**
    * Set callback for position changes (for persistence)
    */
-  public setPositionChangeCallback(callback: (position: PillPosition) => void): void {
+  public setPositionChangeCallback(callback: (position: PillPosition, source: PositionChangeSource) => void): void {
     this.onPositionChangeCallback = callback;
   }
 
@@ -369,10 +383,10 @@ export class TimeDisplayPill {
     }
   }
 
-  private handlePositionChange = (position: PillPosition): void => {
+  private handlePositionChange = (position: PillPosition, source: PositionChangeSource): void => {
     this.state.position = position;
     if (this.onPositionChangeCallback) {
-      this.onPositionChangeCallback(position);
+      this.onPositionChangeCallback(position, source);
     }
   };
 

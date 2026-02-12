@@ -76,10 +76,16 @@ export interface GetSettingsMessage extends ExtensionMessage {
   payload: Record<string, never>;
 }
 
+// Position change source discriminator
+export type PositionChangeSource = "user_drag" | "window_resize";
+
 // Update pill position
 export interface UpdatePillPositionMessage extends ExtensionMessage {
   type: "UPDATE_PILL_POSITION";
-  payload: { position: PillPosition };
+  payload: {
+    position: PillPosition;
+    source: PositionChangeSource;
+  };
 }
 
 // Error report from content script
