@@ -11,17 +11,33 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   user-select: none;
   opacity: 0.90;
-  transition: background 0.25s ease, color 0.25s ease, outline 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.pill-content::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px dashed transparent;
+  border-radius: 7px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, border-color 0.25s ease;
 }
 
 .pill-content.paused {
   color: #64748b;
+}
+
+.pill-content.paused::after,
+.pill-content.inactive::after {
+  border: solid;
   border-color: #1b72e2;
+  opacity: 1;
 }
 
 .pill-content.inactive {
   color: #64748b;
-  border-color: #1b72e2;
   opacity: 0.8;
 }
 
@@ -31,10 +47,13 @@
 }
 
 .pill-content:hover {
-  outline: 2px dashed red;
-  box-shadow: none;
   background: transparent;
   color: transparent;
+}
+
+.pill-content:hover::after {
+  border-color: red;
+  opacity: 1;
 }
 
 .pill-content.dragging {
