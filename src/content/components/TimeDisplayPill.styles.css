@@ -1,120 +1,221 @@
-.pill-content {
+/* Font stacks */
+.pill-card {
+  --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Lucida Console', Consolas, monospace;
+
+  /* Color palette (shadcn-inspired) */
+  --color-primary: #1a1a2e;
+  --color-secondary: #475569;
+  --color-muted: #64748b;
+  --color-subtle: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-bg: #ffffff;
+  --color-accent-blue: #1b72e2;
+  --color-accent-red: red;
+}
+
+.pill-card {
   position: fixed;
   z-index: 2147483647;
-  background: #ffffff;
-  color: #1a1a2e;
-  padding: 4px 8px;
-  border-radius: 5px;
-  border: 1px solid black;
-  font-family: "Lucida Console", 'Monaco', 'Courier New', Courier, monospace;
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+  /* Fixed dimensions */
+  width: 200px;
+  height: 75px;
+
+  /* Card styling */
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.05);
+
+  /* Layout */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 12px;
+
+  /* Interaction */
   user-select: none;
-  opacity: 0.90;
-  transition: background 0.25s ease, color 0.25s ease;
-  /* Table layout for colon alignment */
-  display: table;
-  border-collapse: collapse;
+  cursor: grab;
+
+  /* Base font (labels) */
+  font-family: var(--font-system);
+
+  /* Transitions */
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.pill-row {
-  display: table-row;
+/* Outline pseudo-element for state borders */
+.pill-card::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px dashed transparent;
+  border-radius: 13px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
 }
 
-.label {
-  display: table-cell;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.value {
-  display: table-cell;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  padding-left: 4px;
-  white-space: nowrap;
-}
-
-.visit-count {
-  display: table-row;
-}
-
-.visit-count-cell {
-  display: table-cell;
-  text-align: right;
+/* Row 1: Domain + visits (secondary info) */
+.pill-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
-  color: #64748b;
-  padding-top: 2px;
+  font-weight: 500;
+  color: var(--color-muted);
+  line-height: 1.2;
 }
 
-.pill-content.paused {
-  color: #64748b;
+.pill-header .domain {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
 }
 
-.pill-content.paused .label,
-.pill-content.paused .value {
-  color: #64748b;
+.pill-header .separator {
+  color: var(--color-subtle);
 }
 
-.pill-content.inactive {
-  color: #64748b;
-  opacity: 0.8;
+.pill-header .visits {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.pill-content.inactive .label,
-.pill-content.inactive .value {
-  color: #64748b;
+/* Row 2: Session time (primary) */
+.pill-main {
+  display: flex;
+  align-items: center;
 }
 
-.pill-content.connecting {
-  color: #64748b;
-  opacity: 0.9;
-}
-
-.pill-content:hover {
-  background: transparent;
-  color: transparent;
-}
-
-.pill-content:hover .label,
-.pill-content:hover .value,
-.pill-content:hover .visit-count-cell {
-  color: transparent;
-}
-
-.pill-content.dragging {
-  cursor: grabbing;
-  opacity: 0.8;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-}
-
-.time-display {
+.pill-main .session-time {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
   letter-spacing: 0.5px;
 }
 
-/* Status indicator - hidden */
-.status-indicator {
-  display: none;
+/* Row 3: Today total + Clock (tertiary) */
+.pill-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-muted);
+  line-height: 1.2;
+}
+
+.pill-footer .today-label {
+  font-weight: 500;
+}
+
+.pill-footer .today-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.pill-footer .clock {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-subtle);
+}
+
+/* State: Paused */
+.pill-card.paused {
+  color: var(--color-muted);
+}
+
+.pill-card.paused .pill-main .session-time {
+  color: var(--color-muted);
+}
+
+.pill-card.paused::after {
+  border-style: solid;
+  border-color: var(--color-accent-blue);
+  opacity: 1;
+}
+
+/* State: Inactive */
+.pill-card.inactive {
+  opacity: 0.8;
+}
+
+.pill-card.inactive .pill-main .session-time {
+  color: var(--color-muted);
+}
+
+.pill-card.inactive::after {
+  border-style: solid;
+  border-color: var(--color-accent-blue);
+  opacity: 1;
+}
+
+/* State: Connecting */
+.pill-card.connecting {
+  color: var(--color-muted);
+}
+
+.pill-card.connecting .pill-main .session-time {
+  color: var(--color-muted);
+}
+
+/* State: Hover - content becomes transparent, red dashed border appears */
+.pill-card:hover {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.pill-card:hover .pill-header,
+.pill-card:hover .pill-main,
+.pill-card:hover .pill-footer {
+  visibility: hidden;
+}
+
+.pill-card:hover::after {
+  border-style: dashed;
+  border-color: var(--color-accent-red);
+  opacity: 1;
+}
+
+/* State: Dragging */
+.pill-card.dragging {
+  cursor: grabbing;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.pill-card.dragging::after {
+  border-style: dashed;
+  border-color: var(--color-accent-red);
+  opacity: 1;
 }
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-  .pill-content {
+  .pill-card {
     border: 2px solid currentColor;
     background: #fff;
+  }
+
+  .pill-card .pill-main .session-time {
     color: #000;
   }
 }
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  .pill-content {
+  .pill-card,
+  .pill-card::after {
     transition: none;
-  }
-
-  .pill-content:hover {
-    transform: none;
   }
 }

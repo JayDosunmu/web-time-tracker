@@ -210,7 +210,7 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   // Show connecting state while waiting for background service
   if (isConnecting && !sessionState) {
-    const pillClass = ['pill-content', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
+    const pillClass = ['pill-card', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
     return (
       <div
         ref={pillRef}
@@ -218,8 +218,16 @@ export const Pill: FunctionComponent<PillProps> = ({
         style={positionStyle}
         onMouseDown={handleMouseDown}
       >
-        <div class="pill-row">
-          <span class="label">--:--:--</span>
+        <div class="pill-header">
+          <span class="domain">--</span>
+        </div>
+        <div class="pill-main">
+          <span class="session-time">--:--:--</span>
+        </div>
+        <div class="pill-footer">
+          <span class="today-label">Today</span>
+          <span class="today-time">--:--:--</span>
+          <span class="clock">--:--:--</span>
         </div>
       </div>
     );
@@ -231,7 +239,7 @@ export const Pill: FunctionComponent<PillProps> = ({
   }
 
   const pillClass = [
-    'pill-content',
+    'pill-card',
     !isActive ? 'inactive' : '',
     isPaused ? 'paused' : '',
     isDragging ? 'dragging' : '',
@@ -244,25 +252,21 @@ export const Pill: FunctionComponent<PillProps> = ({
       style={positionStyle}
       onMouseDown={handleMouseDown}
     >
-      {/* Row 1: Domain + time */}
-      <div class="pill-row">
-        <span class="label">{domain}:</span>
-        <span class="value">{formatTime(displayTime)}</span>
+      {/* Row 1: Domain + visits (domain-specific secondary) */}
+      <div class="pill-header">
+        <span class="domain">{domain}</span>
+        <span class="separator">·</span>
+        <span class="visits">{visitCount} visits</span>
       </div>
-      {/* Row 2: Visit count (right-aligned, spans both columns) */}
-      <div class="visit-count">
-        <span class="visit-count-cell"></span>
-        <span class="visit-count-cell">{visitCount} visits</span>
+      {/* Row 2: Session time (primary) */}
+      <div class="pill-main">
+        <span class="session-time">{formatTime(displayTime)}</span>
       </div>
-      {/* Row 3: Today's Total */}
-      <div class="pill-row">
-        <span class="label">Today's Total:</span>
-        <span class="value">{formatTime(totalTimeToday)}</span>
-      </div>
-      {/* Row 4: Clock */}
-      <div class="pill-row">
-        <span class="label">Clock:</span>
-        <span class="value">{formatClockTime(new Date())}</span>
+      {/* Row 3: Today total + Clock (global tertiary) */}
+      <div class="pill-footer">
+        <span class="today-label">Today</span>
+        <span class="today-time">{formatTime(totalTimeToday)}</span>
+        <span class="clock">{formatClockTime(new Date())}</span>
       </div>
     </div>
   );
