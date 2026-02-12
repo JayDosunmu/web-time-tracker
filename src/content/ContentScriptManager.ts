@@ -12,13 +12,15 @@ import type {
 } from "../../types";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
-import { SettingsRepository, TabRepository } from "../shared/repositories";
+import { SettingsRepository, TabRepository, HistoryRepository } from "../shared/repositories";
+import { getDateKey } from "../shared/dateUtils";
 
 export class ContentScriptManager {
   private static instance: ContentScriptManager | null = null;
   private messageRouter: MessageRouter;
   private settingsRepository: SettingsRepository;
   private tabRepository: TabRepository;
+  private historyRepository: HistoryRepository;
   private isInitialized = false;
   private currentDomain: string;
   private components = new Map<string, any>();
@@ -34,6 +36,7 @@ export class ContentScriptManager {
     const storage = browser.storage.local;
     this.settingsRepository = SettingsRepository.getInstance(storage);
     this.tabRepository = TabRepository.getInstance(storage);
+    this.historyRepository = HistoryRepository.getInstance(storage);
   }
 
   /**
@@ -243,16 +246,25 @@ export class ContentScriptManager {
       ]);
 
       // Build session state from activeTab if it matches current domain
-      const sessionState =
-        activeTab && activeTab.domain === this.currentDomain
-          ? {
-              domain: activeTab.domain,
-              currentTime: activeTab.totalTime,
-              isActive: activeTab.active,
-              isPaused: !activeTab.active,
-              startTime: activeTab.lastTimerCheck,
-            }
-          : null;
+      let sessionState = null;
+      if (activeTab && activeTab.domain === this.currentDomain) {
+        // Get today's day data for visitCount and totalTimeToday
+        const todayKey = getDateKey(Date.now());
+        const todayData = await this.historyRepository.getDay(todayKey);
+
+        const visitCount = todayData?.domains[this.currentDomain]?.visitCount ?? 0;
+        const totalTimeToday = todayData?.totalTime ?? 0;
+
+        sessionState = {
+          domain: activeTab.domain,
+          currentTime: activeTab.totalTime,
+          totalTimeToday,
+          visitCount,
+          isActive: activeTab.active,
+          isPaused: !activeTab.active,
+          startTime: activeTab.lastTimerCheck,
+        };
+      }
 
       // Update components with session state
       this.broadcastToComponents("onSessionUpdate", sessionState);

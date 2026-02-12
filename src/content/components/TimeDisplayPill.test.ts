@@ -44,6 +44,8 @@ describe('TimeDisplayPill', () => {
       const sessionState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: Date.now() - 5000
@@ -63,6 +65,8 @@ describe('TimeDisplayPill', () => {
       const activeState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: Date.now() - 5000
@@ -74,6 +78,8 @@ describe('TimeDisplayPill', () => {
       const pausedState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: false,
         isPaused: true,
         startTime: Date.now() - 5000
@@ -91,6 +97,8 @@ describe('TimeDisplayPill', () => {
       const sessionState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: Date.now() - 5000
@@ -116,6 +124,8 @@ describe('TimeDisplayPill', () => {
       const activeState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: Date.now() - 5000
@@ -127,6 +137,8 @@ describe('TimeDisplayPill', () => {
       const pausedState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: false,
         isPaused: true,
         startTime: Date.now() - 5000
@@ -183,6 +195,8 @@ describe('TimeDisplayPill', () => {
       const sessionState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: Date.now() - 5000
@@ -215,6 +229,8 @@ describe('TimeDisplayPill', () => {
       const sessionState: SessionState = {
         domain: 'example.com',
         currentTime: 5000,
+        totalTimeToday: 10000,
+        visitCount: 3,
         isActive: true,
         isPaused: false,
         startTime: Date.now() - 5000

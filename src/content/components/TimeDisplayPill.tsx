@@ -14,6 +14,8 @@ export type { PillPosition };
 export interface SessionState {
   domain: string;
   currentTime: number;
+  totalTimeToday: number;
+  visitCount: number;
   isActive: boolean;
   isPaused: boolean;
   startTime: number;
@@ -30,6 +32,16 @@ function formatTime(milliseconds: number): string {
 
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
+}
+
+/**
+ * Format current time as HH:MM:SS
+ */
+function formatClockTime(date: Date): string {
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 /**
@@ -77,6 +89,9 @@ export const Pill: FunctionComponent<PillProps> = ({
   const isActive = sessionState?.isActive ?? false;
   const isPaused = sessionState?.isPaused ?? false;
   const displayTime = sessionState?.currentTime ?? 0;
+  const totalTimeToday = sessionState?.totalTimeToday ?? 0;
+  const visitCount = sessionState?.visitCount ?? 0;
+  const domain = sessionState?.domain ?? '';
 
   // Update cached bounds and clamp position on window resize (local only, not persisted)
   const updateBoundsAndPosition = useCallback(() => {
@@ -203,7 +218,9 @@ export const Pill: FunctionComponent<PillProps> = ({
         style={positionStyle}
         onMouseDown={handleMouseDown}
       >
-        <span class="time-display">--:--:--</span>
+        <div class="pill-row">
+          <span class="label">--:--:--</span>
+        </div>
       </div>
     );
   }
@@ -227,7 +244,26 @@ export const Pill: FunctionComponent<PillProps> = ({
       style={positionStyle}
       onMouseDown={handleMouseDown}
     >
-      <span class="time-display">{formatTime(displayTime)}</span>
+      {/* Row 1: Domain + time */}
+      <div class="pill-row">
+        <span class="label">{domain}:</span>
+        <span class="value">{formatTime(displayTime)}</span>
+      </div>
+      {/* Row 2: Visit count (right-aligned, spans both columns) */}
+      <div class="visit-count">
+        <span class="visit-count-cell"></span>
+        <span class="visit-count-cell">{visitCount} visits</span>
+      </div>
+      {/* Row 3: Today's Total */}
+      <div class="pill-row">
+        <span class="label">Today's Total:</span>
+        <span class="value">{formatTime(totalTimeToday)}</span>
+      </div>
+      {/* Row 4: Clock */}
+      <div class="pill-row">
+        <span class="label">Clock:</span>
+        <span class="value">{formatClockTime(new Date())}</span>
+      </div>
     </div>
   );
 };
@@ -346,6 +382,7 @@ export class TimeDisplayPill {
 
       // Direct mutation - no object allocation needed for class state
       this.state.sessionState.currentTime += elapsed;
+      this.state.sessionState.totalTimeToday += elapsed;
       this.lastUpdateTime = now;
 
       this.renderComponent();
