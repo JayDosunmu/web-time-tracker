@@ -104,6 +104,8 @@ graph TB
 
 Messages flow between Background and Content Script layers via `browser.runtime.sendMessage` and `browser.tabs.sendMessage`.
 
+> **Architecture Decision:** Settings are delivered using a **push-based model** for reliability. See [ADR-0001: Push-Based Settings](adr/0001-push-based-settings.md) for rationale.
+
 ```mermaid
 graph LR
     subgraph Content["Content Script"]
@@ -115,6 +117,8 @@ graph LR
     end
 
     MR -->|"GET_SESSION_STATE"| BS
+    MR -->|"GET_SETTINGS"| BS
+    MR -->|"UPDATE_PILL_POSITION"| BS
     MR -->|"ERROR_REPORT"| BS
     BS -->|"SESSION_UPDATE"| MR
     BS -->|"SETTINGS_CHANGE"| MR
@@ -122,12 +126,23 @@ graph LR
 
 ### Message Types
 
-| Message | Direction | Payload |
-|---------|-----------|---------|
-| `GET_SESSION_STATE` | Content → Background | `{ domain: string }` |
-| `SESSION_UPDATE` | Background → Content | `{ domain, currentTime, isActive, isPaused, startTime }` |
-| `SETTINGS_CHANGE` | Background → Content | `{ pillPosition, pillVisibility, excludedDomains }` |
-| `ERROR_REPORT` | Content → Background | `{ error, context, stackTrace? }` |
+| Message | Direction | Payload | Description |
+|---------|-----------|---------|-------------|
+| `GET_SESSION_STATE` | Content → Background | `{ domain: string }` | Request current session for domain |
+| `GET_SETTINGS` | Content → Background | `{}` | Request initial settings on load |
+| `UPDATE_PILL_POSITION` | Content → Background | `{ position: PillPosition, source: PositionChangeSource }` | Report pill position change |
+| `SESSION_UPDATE` | Background → Content | `SessionStatePayload` | Push session state to content script |
+| `SETTINGS_CHANGE` | Background → Content | `{ pillPosition?, pillVisibility?, excludedDomains? }` | Push settings changes (cross-tab sync) |
+| `ERROR_REPORT` | Content → Background | `{ error, context, stackTrace? }` | Report content script errors |
+
+### Position Change Source
+
+The `UPDATE_PILL_POSITION` message includes a `source` discriminator to control broadcast behavior:
+
+| Source | Trigger | Background Action |
+|--------|---------|-------------------|
+| `user_drag` | User drags the pill | Save position, broadcast `SETTINGS_CHANGE` to other tabs |
+| `window_resize` | Viewport bounds changed | Save position only (no broadcast) |
 
 ### Base Message Interface
 
@@ -144,6 +159,17 @@ interface MessageResponse<T = unknown> {
   data?: T;
   error?: string;
 }
+
+// Shared session state payload
+interface SessionStatePayload {
+  domain: string;
+  currentTime: number;  // elapsed milliseconds
+  isActive: boolean;
+  isPaused: boolean;
+  startTime: number;    // performance.now() value
+}
+
+type PositionChangeSource = "user_drag" | "window_resize";
 ```
 
 ---
@@ -320,6 +346,9 @@ class BackgroundService {
   // Session access
   getCurrentSession(): Promise<ActiveSession | null>
 
+  // Settings broadcast (called when position changes via user_drag)
+  broadcastSettingsChange(excludeTabId?: number): Promise<void>
+
   // Event handlers (private)
   // handleTabActivated(activeInfo: { tabId, windowId })
   // handleTabUpdated(tabId, changeInfo, tab)
@@ -328,6 +357,19 @@ class BackgroundService {
   // handleMessage(message, sender, sendResponse)
 }
 ```
+
+**Message Handlers:**
+
+| Message Type | Handler Action |
+|--------------|----------------|
+| `GET_SESSION_STATE` | Return current session if domain matches |
+| `GET_SETTINGS` | Return current extension settings |
+| `UPDATE_PILL_POSITION` | Save position; if `source === "user_drag"`, broadcast to other tabs |
+| `ERROR_REPORT` | Log error with context |
+
+**Broadcast Behavior:**
+
+When session updates are sent (tab activation, navigation, etc.), the background also pushes current settings via `SETTINGS_CHANGE` to ensure content scripts have fresh settings without needing to request them.
 
 ### MessageRouter
 
@@ -372,21 +414,38 @@ class ContentScriptManager {
 
   // Message router access
   getMessageRouter(): MessageRouter
+
+  // Error reporting
+  reportError(context: string, error: Error): Promise<void>
 }
 ```
+
+**Initialization Sequence:**
+
+1. Wait for `DOMContentLoaded`
+2. Initialize `MessageRouter` and register handlers for `SESSION_UPDATE`, `SETTINGS_CHANGE`
+3. Create and register `TimeDisplayPill` component
+4. Request initial session state with **exponential backoff retry** (max 5 attempts)
+5. Setup visibility change handler for tab reactivation
+
+**Resilience Features:**
+
+- Exponential backoff retry (100ms × 2^attempt) for background connection issues
+- `AbortController` support for cancellation during retries
+- Visibility-based reconnection when tab becomes visible
 
 ### TimeDisplayPill
 
 ```typescript
 class TimeDisplayPill {
-  constructor()  // Auto-mounts to DOM in Shadow DOM
+  constructor()  // Auto-mounts to DOM in closed Shadow DOM
 
   // ContentScriptManager broadcast handlers
   onSessionUpdate(state: SessionState | null): void
   onSettingsChange(settings: Partial<ExtensionSettings>): void
 
-  // Position persistence
-  setPositionChangeCallback(callback: (position: PillPosition) => void): void
+  // Position persistence (includes source for broadcast control)
+  setPositionChangeCallback(callback: (position: PillPosition, source: PositionChangeSource) => void): void
 
   // Cleanup
   destroy(): void
@@ -398,6 +457,14 @@ interface SessionState {
   isActive: boolean;
   isPaused: boolean;
   startTime: number;    // performance.now() value
+}
+
+// Internal component state
+interface PillState {
+  sessionState: SessionState | null;
+  position: PillPosition;
+  visible: boolean;
+  isConnecting: boolean;  // true while awaiting initial session state
 }
 ```
 

@@ -488,4 +488,167 @@ describe("ContentScriptManager", () => {
       expect(contentManager.getMessageRouter()).toBe(mockMessageRouter);
     });
   });
+
+  describe("Settings loaded on tab initialization", () => {
+    it("should retry settings request when background is not ready", async () => {
+      // Simulate background not ready on first attempts
+      let settingsCallCount = 0;
+      mockMessageRouter.sendMessage.mockImplementation(async (message: any) => {
+        if (message.type === "GET_SETTINGS") {
+          settingsCallCount++;
+          if (settingsCallCount <= 2) {
+            // First 2 attempts fail (background not ready)
+            return { success: false, error: "No response from background service" };
+          }
+          // 3rd attempt succeeds
+          return {
+            success: true,
+            data: { pillPosition: { x: 150, y: 200 }, pillVisibility: true },
+          };
+        }
+        return { success: true, data: null };
+      });
+
+      mockMessageRouter.requestSessionState.mockResolvedValue({
+        success: true,
+        data: null,
+      });
+
+      await contentManager.initialize();
+
+      // Verify retry happened (3 calls for settings)
+      expect(settingsCallCount).toBe(3);
+
+      // Verify pill was created (component registration happened)
+      const pill = contentManager.getComponent("timeDisplayPill");
+      expect(pill).toBeDefined();
+    });
+
+    it("should apply settings to pill when loaded successfully", async () => {
+      const mockSettings = {
+        pillPosition: { x: 250, y: 100 },
+        pillVisibility: false,
+      };
+
+      mockMessageRouter.sendMessage.mockResolvedValue({
+        success: true,
+        data: mockSettings,
+      });
+
+      mockMessageRouter.requestSessionState.mockResolvedValue({
+        success: true,
+        data: null,
+      });
+
+      await contentManager.initialize();
+
+      // Verify onSettingsChange was called on the pill with visibility
+      expect(mockTimeDisplayPill.onSettingsChange).toHaveBeenCalledWith(
+        expect.objectContaining({ pillVisibility: false })
+      );
+    });
+
+    it("should handle settings request failure gracefully after all retries", async () => {
+      // All attempts fail
+      mockMessageRouter.sendMessage.mockResolvedValue({
+        success: false,
+        error: "No response from background service",
+      });
+
+      mockMessageRouter.requestSessionState.mockResolvedValue({
+        success: true,
+        data: null,
+      });
+
+      // Should not throw, should use defaults
+      await expect(contentManager.initialize()).resolves.not.toThrow();
+
+      // Pill should exist with default position (created even without settings)
+      const pill = contentManager.getComponent("timeDisplayPill");
+      expect(pill).toBeDefined();
+    });
+
+    it("should pass initial position to TimeDisplayPill when settings loaded", async () => {
+      const mockSettings = {
+        pillPosition: { x: 300, y: 150 },
+        pillVisibility: true,
+      };
+
+      mockMessageRouter.sendMessage.mockResolvedValue({
+        success: true,
+        data: mockSettings,
+      });
+
+      mockMessageRouter.requestSessionState.mockResolvedValue({
+        success: true,
+        data: null,
+      });
+
+      await contentManager.initialize();
+
+      // Verify TimeDisplayPill was constructed with the position
+      expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 });
+    });
+  });
+
+  describe("Retry cancellation on destroy", () => {
+    it("should cancel pending retries when destroy is called", async () => {
+      // Simulate background never ready - all attempts fail
+      let settingsCallCount = 0;
+      mockMessageRouter.sendMessage.mockImplementation(async () => {
+        settingsCallCount++;
+        // Simulate slow response to allow destroy to be called mid-retry
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { success: false, error: "No response from background service" };
+      });
+
+      mockMessageRouter.requestSessionState.mockResolvedValue({
+        success: true,
+        data: null,
+      });
+
+      // Start initialization but don't await
+      const initPromise = contentManager.initialize();
+
+      // Wait a bit for first retry attempt to start
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Destroy while retries are in progress
+      contentManager.destroy();
+
+      // Initialization should complete (with aborted result)
+      await initPromise;
+
+      // Should not have completed all 5 retries (would take ~3s)
+      expect(settingsCallCount).toBeLessThan(5);
+    });
+
+    it("should not make further requests after abort", async () => {
+      let requestCount = 0;
+      mockMessageRouter.sendMessage.mockImplementation(async () => {
+        requestCount++;
+        return { success: false, error: "No response from background service" };
+      });
+
+      mockMessageRouter.requestSessionState.mockResolvedValue({
+        success: true,
+        data: null,
+      });
+
+      // Initialize first
+      const initPromise = contentManager.initialize();
+
+      // Destroy immediately
+      contentManager.destroy();
+
+      await initPromise;
+
+      const countAfterDestroy = requestCount;
+
+      // Wait to ensure no more requests are made
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(requestCount).toBe(countAfterDestroy);
+    });
+  });
 });

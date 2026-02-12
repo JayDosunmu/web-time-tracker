@@ -347,6 +347,8 @@ All date operations use **local timezone** to match user expectations.
 
 ## Message Flow
 
+> **Architecture Decision:** Settings use a **push-based model** for reliability. See [ADR-0001: Push-Based Settings](adr/0001-push-based-settings.md).
+
 ### Content Script → Background
 
 ```mermaid
@@ -379,11 +381,70 @@ sequenceDiagram
     BS->>TT: startSession()
     TT-->>BS: ActiveSession
     BS->>BS: Build SESSION_UPDATE
-    BS->>RT: sendMessage(tabId, message)
-    RT->>CS: onMessage
+    BS->>BS: Build SETTINGS_CHANGE
+    BS->>RT: sendMessage(tabId, SESSION_UPDATE)
+    BS->>RT: sendMessage(tabId, SETTINGS_CHANGE)
+    RT->>CS: onMessage (SESSION_UPDATE)
     CS->>CS: broadcastToComponents()
     CS->>TDP: onSessionUpdate(state)
     TDP->>TDP: Start animation loop
+    RT->>CS: onMessage (SETTINGS_CHANGE)
+    CS->>TDP: onSettingsChange(settings)
+    TDP->>TDP: Apply position/visibility
+```
+
+### Push-Based Settings Flow
+
+Settings changes are pushed from background to content scripts rather than pulled. This ensures reliability even when the service worker is suspended.
+
+```mermaid
+flowchart TD
+    subgraph Trigger["Trigger Events"]
+        tab["Tab Activation"]
+        nav["Navigation"]
+        drag["User Drags Pill"]
+    end
+
+    subgraph Background["Background Service"]
+        wake["Service Worker Wakes"]
+        push["Push SETTINGS_CHANGE"]
+        broadcast["broadcastSettingsChange()"]
+    end
+
+    subgraph ContentScript["Content Script"]
+        receive["Receive Message"]
+        apply["Apply Settings"]
+    end
+
+    tab --> wake
+    nav --> wake
+    wake --> push
+    push --> receive
+    receive --> apply
+
+    drag -->|"UPDATE_PILL_POSITION<br/>source: user_drag"| broadcast
+    broadcast -->|"SETTINGS_CHANGE<br/>(excludes origin tab)"| receive
+```
+
+### Position Sync Flow
+
+When a user drags the pill, the position syncs across all tabs:
+
+```mermaid
+sequenceDiagram
+    participant TabA as Tab A (TimeDisplayPill)
+    participant MR as MessageRouter
+    participant BS as BackgroundService
+    participant SR as SettingsRepository
+    participant TabB as Tab B (TimeDisplayPill)
+
+    TabA->>TabA: User drags pill
+    TabA->>MR: UPDATE_PILL_POSITION {source: "user_drag"}
+    MR->>BS: sendMessage()
+    BS->>SR: updateSettings({pillPosition})
+    BS->>BS: broadcastSettingsChange(excludeTabId: TabA)
+    BS->>TabB: SETTINGS_CHANGE {pillPosition}
+    TabB->>TabB: Apply position (no save back)
 ```
 
 ---

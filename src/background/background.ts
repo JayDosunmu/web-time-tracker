@@ -9,9 +9,11 @@ import type {
   GetSessionStateMessage,
   SessionStateResponseMessage,
   SessionUpdateMessage,
+  SettingsChangeMessage,
   ErrorReportMessage,
   GetSettingsMessage,
   UpdatePillPositionMessage,
+  ExtensionSettings,
 } from "../../types";
 import { DataModelManager } from "./services/DataModelManager";
 import { TimeTracker } from "./services/TimeTracker";
@@ -127,7 +129,7 @@ export class BackgroundService {
    */
   private async handleMessage(
     message: ExtensionMessageUnion,
-    _sender: browser.runtime.MessageSender,
+    sender: browser.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void,
   ): Promise<boolean> {
     try {
@@ -162,6 +164,7 @@ export class BackgroundService {
           await this.handleUpdatePillPosition(
             message as UpdatePillPositionMessage,
             sendResponse,
+            sender,
           );
           break;
 
@@ -287,11 +290,22 @@ export class BackgroundService {
   private async handleUpdatePillPosition(
     message: UpdatePillPositionMessage,
     sendResponse: (response: MessageResponse) => void,
+    sender: browser.runtime.MessageSender,
   ): Promise<void> {
     try {
       await this.settingsRepository.updateSettings({
         pillPosition: message.payload.position,
       });
+
+      // Only broadcast to other tabs for user-initiated drags
+      // Window resize saves position but doesn't need cross-tab sync
+      if (message.payload.source === "user_drag") {
+        await this.broadcastSettingsChange(
+          { pillPosition: message.payload.position },
+          sender.tab?.id,
+        );
+      }
+
       sendResponse({ success: true });
     } catch (error) {
       console.error("BackgroundService.handleUpdatePillPosition error:", error);
@@ -302,6 +316,38 @@ export class BackgroundService {
             ? error.message
             : "Failed to update pill position",
       });
+    }
+  }
+
+  /**
+   * Broadcast settings changes to all content scripts
+   * @param settings - Partial settings that changed
+   * @param excludeTabId - Optional tab ID to exclude (the one that initiated the change)
+   */
+  private async broadcastSettingsChange(
+    settings: Partial<ExtensionSettings>,
+    excludeTabId?: number,
+  ): Promise<void> {
+    try {
+      const settingsMessage: SettingsChangeMessage = {
+        type: "SETTINGS_CHANGE",
+        payload: settings,
+        id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+        timestamp: Date.now(),
+      };
+
+      const tabs = await browser.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id && tab.id !== excludeTabId) {
+          try {
+            await browser.tabs.sendMessage(tab.id, settingsMessage);
+          } catch {
+            // Content script may not be loaded on this tab - this is normal
+          }
+        }
+      }
+    } catch (error) {
+      console.error("BackgroundService.broadcastSettingsChange error:", error);
     }
   }
 
@@ -325,6 +371,18 @@ export class BackgroundService {
         timestamp: Date.now(),
       };
 
+      // Get current settings to push alongside session update
+      const settings = await this.settingsRepository.getSettings();
+      const settingsMessage: SettingsChangeMessage = {
+        type: "SETTINGS_CHANGE",
+        payload: {
+          pillPosition: settings.pillPosition,
+          pillVisibility: settings.pillVisibility,
+        },
+        id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+        timestamp: Date.now(),
+      };
+
       // Send to all tabs with matching domain
       const tabs = await browser.tabs.query({});
       for (const tab of tabs) {
@@ -333,6 +391,8 @@ export class BackgroundService {
           if (domain === activeTab.domain) {
             try {
               await browser.tabs.sendMessage(tab.id, updateMessage);
+              // Push settings alongside session update
+              await browser.tabs.sendMessage(tab.id, settingsMessage);
             } catch (error) {
               // Content script may not be loaded on this tab - this is normal
               console.debug(`Failed to send message to tab ${tab.id}:`, error);
