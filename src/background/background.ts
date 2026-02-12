@@ -394,6 +394,7 @@ export class BackgroundService {
       const domain = this.timeTracker.extractDomain(tab.url);
 
       // Check if domain is excluded
+      // TODO(Jay): I'm pretty sure this is a dead path. Maybe delete?
       if (await this.isDomainExcluded(domain)) {
         return;
       }
