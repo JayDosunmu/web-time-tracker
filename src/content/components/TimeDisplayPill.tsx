@@ -223,11 +223,16 @@ export const Pill: FunctionComponent<PillProps> = ({
         </div>
         <div class="pill-main">
           <span class="session-time">--:--:--</span>
+          <div class="total-block">
+            <span class="total-label">Total Time</span>
+            <span class="total-time">--:--:--</span>
+          </div>
         </div>
         <div class="pill-footer">
-          <span class="today-label">Today</span>
-          <span class="today-time">--:--:--</span>
-          <span class="clock">--:--:--</span>
+          <span class="clock-pill">
+            <span class="clock-label">Clock:</span>
+            <span class="clock">--:--:--</span>
+          </span>
         </div>
       </div>
     );
@@ -252,21 +257,25 @@ export const Pill: FunctionComponent<PillProps> = ({
       style={positionStyle}
       onMouseDown={handleMouseDown}
     >
-      {/* Row 1: Domain + visits (domain-specific secondary) */}
+      {/* Row 1: Domain + visits */}
       <div class="pill-header">
         <span class="domain">{domain}</span>
-        <span class="separator">·</span>
-        <span class="visits">{visitCount} visits</span>
+        <span class="visits">({visitCount} visits)</span>
       </div>
-      {/* Row 2: Session time (primary) */}
+      {/* Row 2: Session time (left) + Total time block (right) */}
       <div class="pill-main">
         <span class="session-time">{formatTime(displayTime)}</span>
+        <div class="total-block">
+          <span class="total-label">Total Time</span>
+          <span class="total-time">{formatTime(totalTimeToday)}</span>
+        </div>
       </div>
-      {/* Row 3: Today total + Clock (global tertiary) */}
+      {/* Row 3: Clock in grey pill */}
       <div class="pill-footer">
-        <span class="today-label">Today</span>
-        <span class="today-time">{formatTime(totalTimeToday)}</span>
-        <span class="clock">{formatClockTime(new Date())}</span>
+        <span class="clock-pill">
+          <span class="clock-label">Clock:</span>
+          <span class="clock">{formatClockTime(new Date())}</span>
+        </span>
       </div>
     </div>
   );

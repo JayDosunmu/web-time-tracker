@@ -5,10 +5,11 @@
 
   /* Color palette (shadcn-inspired) */
   --color-primary: #1a1a2e;
-  --color-secondary: #475569;
-  --color-muted: #64748b;
+  --color-secondary: #5f6c81;
+  --color-muted: #7d8fa8;
   --color-subtle: #94a3b8;
-  --color-border: #e2e8f0;
+  --color-subtlest: #9cacc1;
+  --color-border: #7e8897;
   --color-bg: #ffffff;
   --color-accent-blue: #1b72e2;
   --color-accent-red: red;
@@ -19,8 +20,8 @@
   z-index: 2147483647;
 
   /* Fixed dimensions */
-  width: 200px;
-  height: 75px;
+  width: 160px;
+  /* height: 90px; */
 
   /* Card styling */
   background: var(--color-bg);
@@ -34,7 +35,8 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 12px;
+  gap: 2px;
 
   /* Interaction */
   user-select: none;
@@ -59,22 +61,23 @@
   transition: opacity 0.2s ease, border-color 0.2s ease;
 }
 
-/* Row 1: Domain + visits (secondary info) */
+/* Row 1: Domain + visits */
 .pill-header {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-muted);
-  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-secondary);
+  margin-bottom: 10px;
+  /* line-height: 1.2; */
 }
 
 .pill-header .domain {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 130px;
 }
 
 .pill-header .separator {
@@ -86,46 +89,76 @@
   flex-shrink: 0;
 }
 
-/* Row 2: Session time (primary) */
+/* Row 2: Session time (primary) + Total time (right) */
 .pill-main {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: space-between;
 }
 
 .pill-main .session-time {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-primary);
   letter-spacing: 0.5px;
+  max-width: 130px
 }
 
-/* Row 3: Today total + Clock (tertiary) */
-.pill-footer {
+/* Total time block (stacked label + value) */
+.pill-main .total-block {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--color-muted);
-  line-height: 1.2;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
 }
 
-.pill-footer .today-label {
+.pill-main .total-label {
+  font-size: 8px;
   font-weight: 500;
+  color: var(--color-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
-.pill-footer .today-time {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.pill-footer .clock {
-  margin-left: auto;
+.pill-main .total-time {
   font-family: var(--font-mono);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-  color: var(--color-subtle);
+  color: var(--color-muted);
+}
+
+/* Row 3: Clock in centered grey pill */
+.pill-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.pill-footer .clock-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  background: #e4e9ef;
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--color-subtlest);
+}
+
+.pill-footer .clock-label {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.pill-footer .clock {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* State: Paused */
