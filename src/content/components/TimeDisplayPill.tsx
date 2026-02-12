@@ -79,7 +79,7 @@ export const Pill: FunctionComponent<PillProps> = ({
   const isPaused = sessionState?.isPaused ?? false;
   const displayTime = sessionState?.currentTime ?? 0;
 
-  // Update cached bounds and clamp position on window resize
+  // Update cached bounds and clamp position on window resize (local only, not persisted)
   const updateBoundsAndPosition = useCallback(() => {
     if (!pillRef.current) return;
     const rect = pillRef.current.getBoundingClientRect();
@@ -88,18 +88,11 @@ export const Pill: FunctionComponent<PillProps> = ({
       maxY: window.innerHeight - rect.height,
     };
     // Clamp current position to new bounds
-    setClampedPosition(prev => {
-      const newPos = {
-        x: Math.max(0, Math.min(prev.x, boundsRef.current.maxX)),
-        y: Math.max(0, Math.min(prev.y, boundsRef.current.maxY)),
-      };
-      // Only save if position actually changed due to resize
-      if (newPos.x !== prev.x || newPos.y !== prev.y) {
-        setTimeout(() => onPositionChange(newPos, "window_resize"), 0);
-      }
-      return newPos;
-    });
-  }, [onPositionChange]);
+    setClampedPosition(prev => ({
+      x: Math.max(0, Math.min(prev.x, boundsRef.current.maxX)),
+      y: Math.max(0, Math.min(prev.y, boundsRef.current.maxY)),
+    }));
+  }, []);
 
   // Initial bounds calculation, position clamp, and resize handler
   useEffect(() => {
