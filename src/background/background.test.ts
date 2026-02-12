@@ -9,7 +9,7 @@ import { testUtils } from "../../tests/utils";
 
 import type { DataModelManager } from "./services/DataModelManager";
 import type { TimeTracker } from "./services/TimeTracker";
-import type { SettingsRepository } from "./repositories/SettingsRepository";
+import type { SettingsRepository } from "../shared/repositories";
 import type { ActiveTab, ExtensionSettings } from "../../types";
 
 describe("BackgroundService", () => {

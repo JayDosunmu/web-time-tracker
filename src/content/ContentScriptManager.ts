@@ -1,14 +1,24 @@
 /**
  * Content script manager with singleton pattern and component lifecycle management
+ *
+ * Uses shared repositories to read state directly from browser.storage.local,
+ * eliminating dependency on background script for data retrieval.
  */
 
-import type { SessionUpdateMessage, SettingsChangeMessage, ExtensionSettings, PillPosition, MessageResponse, SessionStateResponseMessage, PositionChangeSource } from "../../types";
+import type {
+  RefreshStateMessage,
+  PillPosition,
+  PositionChangeSource,
+} from "../../types";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
+import { SettingsRepository, TabRepository } from "../shared/repositories";
 
 export class ContentScriptManager {
   private static instance: ContentScriptManager | null = null;
   private messageRouter: MessageRouter;
+  private settingsRepository: SettingsRepository;
+  private tabRepository: TabRepository;
   private isInitialized = false;
   private currentDomain: string;
   private components = new Map<string, any>();
@@ -19,6 +29,11 @@ export class ContentScriptManager {
     this.messageRouter = new MessageRouter();
     this.currentDomain = this.extractDomain(window.location.href);
     this.abortController = new AbortController();
+
+    // Initialize repositories for direct storage access
+    const storage = browser.storage.local;
+    this.settingsRepository = SettingsRepository.getInstance(storage);
+    this.tabRepository = TabRepository.getInstance(storage);
   }
 
   /**
@@ -154,26 +169,26 @@ export class ContentScriptManager {
    */
   private async initializeComponents(): Promise<void> {
     try {
-      // Request settings before creating components to get saved position
-      const settings = await this.requestSettings();
-      const initialPosition = settings?.pillPosition;
+      // Read settings directly from storage via repository
+      const settings = await this.settingsRepository.getSettings();
+      const initialPosition = settings.pillPosition;
 
-      // Create and register TimeDisplayPill with initial position
+      // Create and register TimeDisplayPill with saved position
       const timeDisplayPill = new TimeDisplayPill(initialPosition);
 
       // Wire up position change callback for persistence
-      timeDisplayPill.setPositionChangeCallback(this.handlePositionChange.bind(this));
+      timeDisplayPill.setPositionChangeCallback(
+        this.handlePositionChange.bind(this),
+      );
 
       this.registerComponent("timeDisplayPill", timeDisplayPill);
 
-      // Apply visibility setting if available
-      if (settings && typeof settings.pillVisibility === "boolean") {
-        timeDisplayPill.onSettingsChange({
-          pillVisibility: settings.pillVisibility,
-        });
-      }
+      // Apply visibility setting
+      timeDisplayPill.onSettingsChange({
+        pillVisibility: settings.pillVisibility,
+      });
 
-      console.log("Components initialized successfully");
+      console.log("Components initialized with settings from storage");
     } catch (error) {
       console.error("ContentScriptManager.initializeComponents error:", error);
       throw error;
@@ -184,26 +199,23 @@ export class ContentScriptManager {
    * Register message handlers
    */
   private registerMessageHandlers(): void {
-    // Handle session updates from background
-    this.messageRouter.registerHandler<SessionUpdateMessage>(
-      "SESSION_UPDATE",
+    // Handle refresh state signals from background
+    this.messageRouter.registerHandler<RefreshStateMessage>(
+      "REFRESH_STATE",
       async (message) => {
         try {
           console.log(
-            "ContentScriptManager received session update:",
-            message.payload,
+            "ContentScriptManager received REFRESH_STATE:",
+            message.payload.reason,
           );
 
-          // Broadcast to all registered components
-          this.broadcastToComponents("onSessionUpdate", message.payload);
-
-          // Settings are now pushed via SETTINGS_CHANGE message from background
-          // (no longer pulling settings here to avoid service worker dependency)
+          // Read fresh state from storage via repositories
+          await this.readStateFromStorage();
 
           return { success: true };
         } catch (error) {
           console.error(
-            "ContentScriptManager.handleSessionUpdate error:",
+            "ContentScriptManager.handleRefreshState error:",
             error,
           );
           return {
@@ -211,37 +223,7 @@ export class ContentScriptManager {
             error:
               error instanceof Error
                 ? error.message
-                : "Session update handling failed",
-          };
-        }
-      },
-    );
-
-    // Handle settings changes from background
-    this.messageRouter.registerHandler<SettingsChangeMessage>(
-      "SETTINGS_CHANGE",
-      async (message) => {
-        try {
-          console.log(
-            "ContentScriptManager received settings change:",
-            message.payload,
-          );
-
-          // Broadcast to all registered components
-          this.broadcastToComponents("onSettingsChange", message.payload);
-
-          return { success: true };
-        } catch (error) {
-          console.error(
-            "ContentScriptManager.handleSettingsChange error:",
-            error,
-          );
-          return {
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Settings change handling failed",
+                : "Refresh state handling failed",
           };
         }
       },
@@ -249,154 +231,70 @@ export class ContentScriptManager {
   }
 
   /**
-   * Execute a message request with retry logic for background connection issues
-   * Supports cancellation via the instance's AbortController
+   * Read all state directly from storage via repositories
+   * This is the primary method for getting session and settings data
    */
-  private async requestWithRetry<T>(
-    request: () => Promise<MessageResponse>,
-    context: string,
-    options: { maxRetries?: number; baseDelay?: number } = {}
-  ): Promise<{ success: boolean; data: T | null; error?: string }> {
-    const { maxRetries = 5, baseDelay = 100 } = options;
-    let lastError: unknown = null;
+  private async readStateFromStorage(): Promise<void> {
+    try {
+      // Read settings and active tab in parallel
+      const [settings, activeTab] = await Promise.all([
+        this.settingsRepository.getSettings(),
+        this.tabRepository.getActiveTab(),
+      ]);
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // Check if aborted before each attempt (null means destroyed)
-      if (!this.abortController || this.abortController.signal.aborted) {
-        console.log(`${context} request aborted`);
-        return { success: false, data: null, error: "Aborted" };
-      }
+      // Build session state from activeTab if it matches current domain
+      const sessionState =
+        activeTab && activeTab.domain === this.currentDomain
+          ? {
+              domain: activeTab.domain,
+              currentTime: activeTab.totalTime,
+              isActive: activeTab.active,
+              isPaused: !activeTab.active,
+              startTime: activeTab.lastTimerCheck,
+            }
+          : null;
 
-      try {
-        const response = await request();
+      // Update components with session state
+      this.broadcastToComponents("onSessionUpdate", sessionState);
 
-        if (response.success) {
-          return { success: true, data: (response.data as T) ?? null };
-        }
+      // Update components with settings
+      this.broadcastToComponents("onSettingsChange", {
+        pillPosition: settings.pillPosition,
+        pillVisibility: settings.pillVisibility,
+      });
 
-        // Check if error indicates background not ready
-        const errorMsg = response.error || "";
-        if (
-          errorMsg.includes("No response") ||
-          errorMsg.includes("Could not establish connection") ||
-          errorMsg.includes("receiving end does not exist")
-        ) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          console.log(`Background not ready for ${context}, retrying in ${delay}ms...`);
-
-          // Use abortable delay
-          await this.abortableDelay(delay);
-
-          // Check if aborted during delay (null means destroyed)
-          if (!this.abortController || this.abortController.signal.aborted) {
-            console.log(`${context} request aborted during retry delay`);
-            return { success: false, data: null, error: "Aborted" };
-          }
-          continue;
-        }
-
-        // Other error - don't retry
-        return { success: false, data: null, error: response.error || "Unknown error" };
-      } catch (error) {
-        lastError = error;
-        const delay = baseDelay * Math.pow(2, attempt);
-        console.error(`${context} request failed (attempt ${attempt + 1}):`, error);
-
-        if (attempt < maxRetries - 1) {
-          await this.abortableDelay(delay);
-
-          // Check if aborted during delay (null means destroyed)
-          if (!this.abortController || this.abortController.signal.aborted) {
-            console.log(`${context} request aborted during retry delay`);
-            return { success: false, data: null, error: "Aborted" };
-          }
-        }
-      }
+      console.log("State refreshed from storage");
+    } catch (error) {
+      console.error("Failed to read state from storage:", error);
     }
-
-    console.warn(`Could not complete ${context} after ${maxRetries} retries`);
-    return {
-      success: false,
-      data: null,
-      error: lastError instanceof Error ? lastError.message : "Max retries exceeded",
-    };
   }
 
   /**
-   * Create an abortable delay that can be canceled via AbortController
-   */
-  private abortableDelay(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      const timeoutId = setTimeout(resolve, ms);
-
-      // If already aborted, resolve immediately
-      if (this.abortController?.signal.aborted) {
-        clearTimeout(timeoutId);
-        resolve();
-        return;
-      }
-
-      // Listen for abort to clear timeout early
-      const abortHandler = (): void => {
-        clearTimeout(timeoutId);
-        resolve();
-      };
-
-      this.abortController?.signal.addEventListener("abort", abortHandler, { once: true });
-
-      // Clean up listener after timeout completes
-      setTimeout(() => {
-        this.abortController?.signal.removeEventListener("abort", abortHandler);
-      }, ms + 1);
-    });
-  }
-
-  /**
-   * Request initial session state from background service with retry logic
+   * Request initial session state by reading from storage
+   * No longer depends on background service - reads directly via repositories
    */
   private async requestInitialState(): Promise<void> {
-    console.log(`Requesting session state for domain: ${this.currentDomain}`);
-
-    const result = await this.requestWithRetry<SessionStateResponseMessage["payload"]>(
-      () => this.messageRouter.requestSessionState(this.currentDomain),
-      "session state"
-    );
-
-    if (!result.success && result.error) {
-      await this.reportError("Failed to request initial session state", new Error(result.error));
-    }
-
-    this.broadcastToComponents("onSessionUpdate", result.data);
-  }
-
-  /**
-   * Request settings from background service with retry logic
-   */
-  private async requestSettings(): Promise<ExtensionSettings | null> {
-    const result = await this.requestWithRetry<ExtensionSettings>(
-      () => this.messageRouter.sendMessage({ type: "GET_SETTINGS", payload: {} }),
-      "settings"
-    );
-
-    if (!result.success) {
-      console.warn("Failed to get settings:", result.error);
-    }
-
-    return result.data;
+    console.log(`Reading session state for domain: ${this.currentDomain}`);
+    await this.readStateFromStorage();
   }
 
   /**
    * Handle position changes from TimeDisplayPill drag or window resize
    */
-  private async handlePositionChange(position: PillPosition, source: PositionChangeSource): Promise<void> {
+  private async handlePositionChange(
+    position: PillPosition,
+    source: PositionChangeSource,
+  ): Promise<void> {
     try {
       // Validate position before saving
-      if (!position ||
-          typeof position.x !== 'number' ||
-          typeof position.y !== 'number' ||
-          !Number.isFinite(position.x) ||
-          !Number.isFinite(position.y)) {
-        console.error('Invalid pill position, not saving:', position);
+      if (
+        !position ||
+        typeof position.x !== "number" ||
+        typeof position.y !== "number" ||
+        !Number.isFinite(position.x) ||
+        !Number.isFinite(position.y)
+      ) {
+        console.error("Invalid pill position, not saving:", position);
         return;
       }
 
@@ -406,7 +304,10 @@ export class ContentScriptManager {
       });
 
       if (!response.success) {
-        console.error("Failed to save pill position:", response.error || 'No response from background');
+        console.error(
+          "Failed to save pill position:",
+          response.error || "No response from background",
+        );
       }
     } catch (error) {
       console.error("Error saving pill position:", error);
@@ -437,15 +338,18 @@ export class ContentScriptManager {
    */
   private setupVisibilityHandler(): void {
     this.visibilityHandler = (): void => {
-      if (document.visibilityState === 'visible') {
-        console.log('Tab became visible, requesting fresh session state');
+      if (document.visibilityState === "visible") {
+        console.log("Tab became visible, requesting fresh session state");
         this.requestInitialState().catch((error) => {
-          console.error('Failed to request session state on visibility change:', error);
+          console.error(
+            "Failed to request session state on visibility change:",
+            error,
+          );
         });
       }
     };
 
-    document.addEventListener('visibilitychange', this.visibilityHandler);
+    document.addEventListener("visibilitychange", this.visibilityHandler);
   }
 
   /**
@@ -511,7 +415,10 @@ export class ContentScriptManager {
     try {
       // Remove visibility change listener
       if (this.visibilityHandler) {
-        document.removeEventListener('visibilitychange', this.visibilityHandler);
+        document.removeEventListener(
+          "visibilitychange",
+          this.visibilityHandler,
+        );
         this.visibilityHandler = null;
       }
 

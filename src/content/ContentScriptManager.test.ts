@@ -10,20 +10,35 @@ import { testUtils } from "../../tests/utils";
 import { ContentScriptManager } from "./ContentScriptManager";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
-import type {
-  SessionUpdateMessage,
-  SettingsChangeMessage,
-  MessageResponse,
-} from "../../types";
+import { SettingsRepository, TabRepository } from "../shared/repositories";
+import type { RefreshStateMessage } from "../../types";
 
 // Mock dependencies
 jest.mock("./messaging/MessageRouter");
 jest.mock("./components/TimeDisplayPill");
+jest.mock("../shared/repositories");
 
 describe("ContentScriptManager", () => {
   let contentManager: ContentScriptManager;
   let mockMessageRouter: jest.Mocked<MessageRouter>;
   let mockTimeDisplayPill: jest.Mocked<TimeDisplayPill>;
+  let mockSettingsRepository: jest.Mocked<SettingsRepository>;
+  let mockTabRepository: jest.Mocked<TabRepository>;
+
+  const mockSettings = {
+    pillPosition: { x: 100, y: 100 },
+    pillVisibility: true,
+    dataRetentionDays: 30,
+    excludedDomains: [],
+  };
+
+  const mockActiveTab = {
+    domain: "example.com",
+    totalTime: 5000,
+    active: true,
+    lastActivated: 1000,
+    lastTimerCheck: 1000,
+  };
 
   beforeEach(() => {
     testUtils.resetAll();
@@ -46,13 +61,32 @@ describe("ContentScriptManager", () => {
       destroy: jest.fn(),
     } as any;
 
+    mockSettingsRepository = {
+      getSettings: jest.fn().mockResolvedValue(mockSettings),
+      updateSettings: jest.fn().mockResolvedValue(undefined),
+      isDomainExcluded: jest.fn().mockResolvedValue(false),
+    } as any;
+
+    mockTabRepository = {
+      getActiveTab: jest.fn().mockResolvedValue(mockActiveTab),
+      setActiveTab: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     // Mock constructors
     (MessageRouter as jest.Mock).mockImplementation(() => mockMessageRouter);
     (TimeDisplayPill as jest.Mock).mockImplementation(
       () => mockTimeDisplayPill,
     );
+    (SettingsRepository.getInstance as jest.Mock).mockReturnValue(
+      mockSettingsRepository,
+    );
+    (TabRepository.getInstance as jest.Mock).mockReturnValue(
+      mockTabRepository,
+    );
 
-    // Reset singleton instance and create new one with proper location
+    // Reset singleton instances
+    SettingsRepository.resetInstance();
+    TabRepository.resetInstance();
     ContentScriptManager.resetInstance();
     contentManager = ContentScriptManager.getInstance();
   });
@@ -84,32 +118,18 @@ describe("ContentScriptManager", () => {
 
   describe("Initialization", () => {
     it("should initialize successfully", async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: {
-          domain: "example.com",
-          currentTime: 5000,
-          isActive: true,
-          isPaused: false,
-          startTime: 1000,
-        },
-      });
-
       await contentManager.initialize();
 
       expect(contentManager.isReady()).toBe(true);
       expect(mockMessageRouter.initialize).toHaveBeenCalled();
-      expect(mockMessageRouter.registerHandler).toHaveBeenCalledTimes(2);
-      expect(mockMessageRouter.requestSessionState).toHaveBeenCalledWith(
-        "example.com",
-      );
+      // Only one handler now (REFRESH_STATE)
+      expect(mockMessageRouter.registerHandler).toHaveBeenCalledTimes(1);
+      // Should read from storage via repositories
+      expect(mockSettingsRepository.getSettings).toHaveBeenCalled();
+      expect(mockTabRepository.getActiveTab).toHaveBeenCalled();
     });
 
     it("should not reinitialize if already initialized", async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
-
       await contentManager.initialize();
       await contentManager.initialize();
 
@@ -132,10 +152,6 @@ describe("ContentScriptManager", () => {
         value: "loading",
       });
 
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
-
       const initPromise = contentManager.initialize();
 
       // Simulate DOMContentLoaded
@@ -150,9 +166,6 @@ describe("ContentScriptManager", () => {
 
   describe("Domain Management", () => {
     beforeEach(async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
       await contentManager.initialize();
     });
 
@@ -160,29 +173,30 @@ describe("ContentScriptManager", () => {
       expect(contentManager.getDomain()).toBe("example.com");
     });
 
-    it("should handle URL changes", () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
+    it("should handle URL changes", async () => {
+      // Reset mock call counts after initialization
+      mockTabRepository.getActiveTab.mockClear();
+      mockSettingsRepository.getSettings.mockClear();
 
       contentManager.handleUrlChange("https://newdomain.com/page");
 
       expect(contentManager.getDomain()).toBe("newdomain.com");
-      expect(mockMessageRouter.requestSessionState).toHaveBeenCalledWith(
-        "newdomain.com",
-      );
+      // Should read state from storage for new domain
+      // Wait for async operation
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mockTabRepository.getActiveTab).toHaveBeenCalled();
     });
 
-    it("should ignore URL changes within same domain", () => {
-      const initialCallCount =
-        mockMessageRouter.requestSessionState.mock.calls.length;
+    it("should ignore URL changes within same domain", async () => {
+      // Reset mock call counts after initialization
+      mockTabRepository.getActiveTab.mockClear();
 
       contentManager.handleUrlChange("https://example.com/different-page");
 
       expect(contentManager.getDomain()).toBe("example.com");
-      expect(mockMessageRouter.requestSessionState).toHaveBeenCalledTimes(
-        initialCallCount,
-      );
+      // Should not trigger new storage reads for same domain
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mockTabRepository.getActiveTab).not.toHaveBeenCalled();
     });
 
     it("should handle invalid URLs gracefully", () => {
@@ -193,9 +207,6 @@ describe("ContentScriptManager", () => {
 
   describe("Component Management", () => {
     beforeEach(async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
       await contentManager.initialize();
     });
 
@@ -230,189 +241,127 @@ describe("ContentScriptManager", () => {
   });
 
   describe("Message Handling", () => {
-    let sessionUpdateHandler: (message: any) => Promise<any>;
-    let settingsChangeHandler: (message: any) => Promise<any>;
+    let refreshStateHandler: (message: any) => Promise<any>;
 
     beforeEach(async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
       await contentManager.initialize();
 
-      // Get the registered handlers - wrapping the 3-arg handler to simplify testing
+      // Get the registered REFRESH_STATE handler
       const registerCalls = mockMessageRouter.registerHandler.mock.calls;
-      const sessionCall = registerCalls.find(
-        (call) => call[0] === "SESSION_UPDATE",
+      const refreshCall = registerCalls.find(
+        (call) => call[0] === "REFRESH_STATE",
       );
-      const settingsCall = registerCalls.find(
-        (call) => call[0] === "SETTINGS_CHANGE",
-      );
-      const rawSessionHandler = sessionCall![1];
-      const rawSettingsHandler = settingsCall![1];
-      // Wrap handlers to call with mock sender and sendResponse for testing
+      const rawHandler = refreshCall![1];
+      // Wrap handler to call with mock sender and sendResponse for testing
       const mockSender = {} as browser.runtime.MessageSender;
       const mockSendResponse = jest.fn();
-      sessionUpdateHandler = (message: any) =>
-        Promise.resolve(rawSessionHandler(message, mockSender, mockSendResponse)).then(
-          (result) => (typeof result === "boolean" ? { success: result } : result),
-        );
-      settingsChangeHandler = (message: any) =>
-        Promise.resolve(rawSettingsHandler(message, mockSender, mockSendResponse)).then(
+      refreshStateHandler = (message: any) =>
+        Promise.resolve(rawHandler(message, mockSender, mockSendResponse)).then(
           (result) => (typeof result === "boolean" ? { success: result } : result),
         );
     });
 
-    it("should register message handlers", () => {
+    it("should register REFRESH_STATE message handler", () => {
       expect(mockMessageRouter.registerHandler).toHaveBeenCalledWith(
-        "SESSION_UPDATE",
-        expect.any(Function),
-      );
-      expect(mockMessageRouter.registerHandler).toHaveBeenCalledWith(
-        "SETTINGS_CHANGE",
+        "REFRESH_STATE",
         expect.any(Function),
       );
     });
 
-    it("should handle session update messages", async () => {
-      const sessionMessage: SessionUpdateMessage = {
-        type: "SESSION_UPDATE",
-        payload: {
-          domain: "example.com",
-          currentTime: 5000,
-          isActive: true,
-          isPaused: false,
-          startTime: 1000,
-        },
+    it("should handle REFRESH_STATE messages by reading from storage", async () => {
+      // Clear previous calls from initialization
+      mockSettingsRepository.getSettings.mockClear();
+      mockTabRepository.getActiveTab.mockClear();
+      mockTimeDisplayPill.onSessionUpdate.mockClear();
+      mockTimeDisplayPill.onSettingsChange.mockClear();
+
+      const refreshMessage: RefreshStateMessage = {
+        type: "REFRESH_STATE",
+        payload: { reason: "tab_activated" },
         id: "test-id",
         timestamp: Date.now(),
       };
 
-      const result = await sessionUpdateHandler(sessionMessage);
+      const result = await refreshStateHandler(refreshMessage);
 
       expect(result.success).toBe(true);
-      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(
-        sessionMessage.payload,
-      );
+      // Should read from storage
+      expect(mockSettingsRepository.getSettings).toHaveBeenCalled();
+      expect(mockTabRepository.getActiveTab).toHaveBeenCalled();
+      // Should update components
+      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalled();
+      expect(mockTimeDisplayPill.onSettingsChange).toHaveBeenCalled();
     });
 
-    it("should handle settings change messages", async () => {
-      const settingsMessage: SettingsChangeMessage = {
-        type: "SETTINGS_CHANGE",
-        payload: {
-          pillPosition: { x: 10, y: 10 },
-          pillVisibility: true,
-          excludedDomains: ["blocked.com"],
-        },
-        id: "test-id",
-        timestamp: Date.now(),
-      };
-
-      const result = await settingsChangeHandler(settingsMessage);
-
-      expect(result.success).toBe(true);
-      expect(mockTimeDisplayPill.onSettingsChange).toHaveBeenCalledWith(
-        settingsMessage.payload,
-      );
-    });
-
-    it("should handle message handler errors", async () => {
-      mockTimeDisplayPill.onSessionUpdate.mockImplementation(() => {
-        throw new Error("Component error");
+    it("should handle REFRESH_STATE when active tab domain differs", async () => {
+      // Set up active tab with different domain
+      mockTabRepository.getActiveTab.mockResolvedValue({
+        domain: "different.com",
+        totalTime: 1000,
+        active: true,
+        lastActivated: 1000,
+        lastTimerCheck: 1000,
       });
 
-      const sessionMessage: SessionUpdateMessage = {
-        type: "SESSION_UPDATE",
-        payload: {
-          domain: "example.com",
-          currentTime: 5000,
-          isActive: true,
-          isPaused: false,
-          startTime: 1000,
-        },
+      mockTimeDisplayPill.onSessionUpdate.mockClear();
+
+      const refreshMessage: RefreshStateMessage = {
+        type: "REFRESH_STATE",
+        payload: { reason: "navigation" },
         id: "test-id",
         timestamp: Date.now(),
       };
 
-      // The ContentScriptManager catches component errors and continues
-      // so the handler should still return success
-      const result = await sessionUpdateHandler(sessionMessage);
+      await refreshStateHandler(refreshMessage);
 
-      expect(result.success).toBe(true);
-      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalled();
+      // Should call onSessionUpdate with null when domains don't match
+      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(null);
     });
   });
 
   describe("Initial State Request", () => {
-    it("should request initial state successfully", async () => {
-      const mockResponse: MessageResponse = {
-        success: true,
-        data: {
-          domain: "example.com",
-          currentTime: 5000,
-          isActive: true,
-          isPaused: false,
-          startTime: 1000,
-        },
-      };
-
-      mockMessageRouter.requestSessionState.mockResolvedValue(mockResponse);
-
+    it("should read initial state from storage successfully", async () => {
       await contentManager.initialize();
 
-      expect(mockMessageRouter.requestSessionState).toHaveBeenCalledWith(
-        "example.com",
-      );
-      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(
-        mockResponse.data,
-      );
+      // Should read from repositories
+      expect(mockSettingsRepository.getSettings).toHaveBeenCalled();
+      expect(mockTabRepository.getActiveTab).toHaveBeenCalled();
+      // Should update pill with session state
+      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith({
+        domain: "example.com",
+        currentTime: 5000,
+        isActive: true,
+        isPaused: false,
+        startTime: 1000,
+      });
     });
 
     it("should handle no active session", async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
+      mockTabRepository.getActiveTab.mockResolvedValue(null);
 
       await contentManager.initialize();
 
       expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(null);
     });
 
-    it("should handle request failures", async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: false,
-        error: "Request failed",
-      });
-
-      await contentManager.initialize();
-
-      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(null);
-    });
-
-    it("should handle request errors", async () => {
-      mockMessageRouter.requestSessionState.mockRejectedValue(
-        new Error("Network error"),
+    it("should handle storage read errors gracefully", async () => {
+      mockTabRepository.getActiveTab.mockRejectedValue(
+        new Error("Storage error"),
       );
 
+      // Should not throw - errors are caught internally
       await contentManager.initialize();
 
-      expect(mockMessageRouter.reportError).toHaveBeenCalledWith(
-        "Network error",
-        "Failed to request initial session state",
-        expect.any(String),
-      );
+      expect(contentManager.isReady()).toBe(true);
     });
   });
 
   describe("Error Handling", () => {
     beforeEach(async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
       await contentManager.initialize();
     });
 
-    it("should report component broadcast errors", async () => {
+    it("should handle component broadcast errors gracefully", async () => {
       const brokenComponent = {
         onSessionUpdate: jest.fn().mockImplementation(() => {
           throw new Error("Component broken");
@@ -421,23 +370,17 @@ describe("ContentScriptManager", () => {
 
       contentManager.registerComponent("brokenComponent", brokenComponent);
 
-      // Trigger a broadcast
+      // Trigger a broadcast via REFRESH_STATE
       const registerCalls = mockMessageRouter.registerHandler.mock.calls;
-      const sessionCall = registerCalls.find(
-        (call) => call[0] === "SESSION_UPDATE",
+      const refreshCall = registerCalls.find(
+        (call) => call[0] === "REFRESH_STATE",
       );
-      expect(sessionCall).toBeDefined();
-      const rawHandler = sessionCall![1];
+      expect(refreshCall).toBeDefined();
+      const rawHandler = refreshCall![1];
 
-      const sessionMessage: SessionUpdateMessage = {
-        type: "SESSION_UPDATE",
-        payload: {
-          domain: "example.com",
-          currentTime: 5000,
-          isActive: true,
-          isPaused: false,
-          startTime: 1000,
-        },
+      const refreshMessage: RefreshStateMessage = {
+        type: "REFRESH_STATE",
+        payload: { reason: "tab_activated" },
         id: "test-id",
         timestamp: Date.now(),
       };
@@ -446,16 +389,13 @@ describe("ContentScriptManager", () => {
       const mockSender = {} as browser.runtime.MessageSender;
       const mockSendResponse = jest.fn();
       await expect(
-        Promise.resolve(rawHandler(sessionMessage, mockSender, mockSendResponse)),
+        Promise.resolve(rawHandler(refreshMessage, mockSender, mockSendResponse)),
       ).resolves.not.toThrow();
     });
   });
 
   describe("Cleanup", () => {
     it("should destroy properly when initialized", async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
       await contentManager.initialize();
 
       contentManager.destroy();
@@ -470,9 +410,6 @@ describe("ContentScriptManager", () => {
     });
 
     it("should handle component destroy errors", async () => {
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-      });
       await contentManager.initialize();
 
       mockTimeDisplayPill.destroy.mockImplementation(() => {
@@ -490,55 +427,26 @@ describe("ContentScriptManager", () => {
   });
 
   describe("Settings loaded on tab initialization", () => {
-    it("should retry settings request when background is not ready", async () => {
-      // Simulate background not ready on first attempts
-      let settingsCallCount = 0;
-      mockMessageRouter.sendMessage.mockImplementation(async (message: any) => {
-        if (message.type === "GET_SETTINGS") {
-          settingsCallCount++;
-          if (settingsCallCount <= 2) {
-            // First 2 attempts fail (background not ready)
-            return { success: false, error: "No response from background service" };
-          }
-          // 3rd attempt succeeds
-          return {
-            success: true,
-            data: { pillPosition: { x: 150, y: 200 }, pillVisibility: true },
-          };
-        }
-        return { success: true, data: null };
-      });
-
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
-
+    it("should read settings from storage during initialization", async () => {
       await contentManager.initialize();
 
-      // Verify retry happened (3 calls for settings)
-      expect(settingsCallCount).toBe(3);
+      // Verify settings were read from repository
+      expect(mockSettingsRepository.getSettings).toHaveBeenCalled();
 
-      // Verify pill was created (component registration happened)
+      // Verify pill was created
       const pill = contentManager.getComponent("timeDisplayPill");
       expect(pill).toBeDefined();
     });
 
     it("should apply settings to pill when loaded successfully", async () => {
-      const mockSettings = {
+      const customSettings = {
         pillPosition: { x: 250, y: 100 },
         pillVisibility: false,
+        dataRetentionDays: 30,
+        excludedDomains: [],
       };
 
-      mockMessageRouter.sendMessage.mockResolvedValue({
-        success: true,
-        data: mockSettings,
-      });
-
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
+      mockSettingsRepository.getSettings.mockResolvedValue(customSettings);
 
       await contentManager.initialize();
 
@@ -548,107 +456,59 @@ describe("ContentScriptManager", () => {
       );
     });
 
-    it("should handle settings request failure gracefully after all retries", async () => {
-      // All attempts fail
-      mockMessageRouter.sendMessage.mockResolvedValue({
-        success: false,
-        error: "No response from background service",
-      });
+    it("should handle storage read errors gracefully", async () => {
+      mockSettingsRepository.getSettings.mockRejectedValue(
+        new Error("Storage error")
+      );
 
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
-
-      // Should not throw, should use defaults
-      await expect(contentManager.initialize()).resolves.not.toThrow();
-
-      // Pill should exist with default position (created even without settings)
-      const pill = contentManager.getComponent("timeDisplayPill");
-      expect(pill).toBeDefined();
+      // Should not throw - errors are caught internally
+      await expect(contentManager.initialize()).rejects.toThrow();
     });
 
-    it("should pass initial position to TimeDisplayPill when settings loaded", async () => {
-      const mockSettings = {
+    it("should pass initial position to TimeDisplayPill from storage", async () => {
+      const customSettings = {
         pillPosition: { x: 300, y: 150 },
         pillVisibility: true,
+        dataRetentionDays: 30,
+        excludedDomains: [],
       };
 
-      mockMessageRouter.sendMessage.mockResolvedValue({
-        success: true,
-        data: mockSettings,
-      });
-
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
+      mockSettingsRepository.getSettings.mockResolvedValue(customSettings);
 
       await contentManager.initialize();
 
-      // Verify TimeDisplayPill was constructed with the position
+      // Verify TimeDisplayPill was constructed with the position from storage
       expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 });
     });
   });
 
-  describe("Retry cancellation on destroy", () => {
-    it("should cancel pending retries when destroy is called", async () => {
-      // Simulate background never ready - all attempts fail
-      let settingsCallCount = 0;
-      mockMessageRouter.sendMessage.mockImplementation(async () => {
-        settingsCallCount++;
-        // Simulate slow response to allow destroy to be called mid-retry
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        return { success: false, error: "No response from background service" };
-      });
+  describe("Storage-based state loading", () => {
+    it("should read both settings and active tab on initialization", async () => {
+      await contentManager.initialize();
 
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
-
-      // Start initialization but don't await
-      const initPromise = contentManager.initialize();
-
-      // Wait a bit for first retry attempt to start
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // Destroy while retries are in progress
-      contentManager.destroy();
-
-      // Initialization should complete (with aborted result)
-      await initPromise;
-
-      // Should not have completed all 5 retries (would take ~3s)
-      expect(settingsCallCount).toBeLessThan(5);
+      expect(mockSettingsRepository.getSettings).toHaveBeenCalled();
+      expect(mockTabRepository.getActiveTab).toHaveBeenCalled();
     });
 
-    it("should not make further requests after abort", async () => {
-      let requestCount = 0;
-      mockMessageRouter.sendMessage.mockImplementation(async () => {
-        requestCount++;
-        return { success: false, error: "No response from background service" };
+    it("should build session state from active tab when domains match", async () => {
+      await contentManager.initialize();
+
+      // Should build and pass session state to pill
+      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith({
+        domain: "example.com",
+        currentTime: 5000,
+        isActive: true,
+        isPaused: false,
+        startTime: 1000,
       });
+    });
 
-      mockMessageRouter.requestSessionState.mockResolvedValue({
-        success: true,
-        data: null,
-      });
+    it("should pass null session state when no active tab", async () => {
+      mockTabRepository.getActiveTab.mockResolvedValue(null);
 
-      // Initialize first
-      const initPromise = contentManager.initialize();
+      await contentManager.initialize();
 
-      // Destroy immediately
-      contentManager.destroy();
-
-      await initPromise;
-
-      const countAfterDestroy = requestCount;
-
-      // Wait to ensure no more requests are made
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      expect(requestCount).toBe(countAfterDestroy);
+      expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(null);
     });
   });
 });

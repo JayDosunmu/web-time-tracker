@@ -8,18 +8,19 @@ import type {
   MessageResponse,
   GetSessionStateMessage,
   SessionStateResponseMessage,
-  SessionUpdateMessage,
-  SettingsChangeMessage,
+  RefreshStateMessage,
+  RefreshStateReason,
   ErrorReportMessage,
   GetSettingsMessage,
   UpdatePillPositionMessage,
-  ExtensionSettings,
 } from "../../types";
 import { DataModelManager } from "./services/DataModelManager";
 import { TimeTracker } from "./services/TimeTracker";
-import { HistoryRepository } from "./repositories/HistoryRepository";
-import { TabRepository } from "./repositories/TabRepository";
-import { SettingsRepository } from "./repositories/SettingsRepository";
+import {
+  HistoryRepository,
+  TabRepository,
+  SettingsRepository,
+} from "../shared/repositories";
 
 export class BackgroundService {
   private static instance: BackgroundService | null = null;
@@ -129,7 +130,7 @@ export class BackgroundService {
    */
   private async handleMessage(
     message: ExtensionMessageUnion,
-    sender: browser.runtime.MessageSender,
+    _: browser.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void,
   ): Promise<boolean> {
     try {
@@ -164,7 +165,6 @@ export class BackgroundService {
           await this.handleUpdatePillPosition(
             message as UpdatePillPositionMessage,
             sendResponse,
-            sender,
           );
           break;
 
@@ -290,21 +290,11 @@ export class BackgroundService {
   private async handleUpdatePillPosition(
     message: UpdatePillPositionMessage,
     sendResponse: (response: MessageResponse) => void,
-    sender: browser.runtime.MessageSender,
   ): Promise<void> {
     try {
       await this.settingsRepository.updateSettings({
         pillPosition: message.payload.position,
       });
-
-      // Only broadcast to other tabs for user-initiated drags
-      // Window resize saves position but doesn't need cross-tab sync
-      if (message.payload.source === "user_drag") {
-        await this.broadcastSettingsChange(
-          { pillPosition: message.payload.position },
-          sender.tab?.id,
-        );
-      }
 
       sendResponse({ success: true });
     } catch (error) {
@@ -320,88 +310,49 @@ export class BackgroundService {
   }
 
   /**
-   * Broadcast settings changes to all content scripts
-   * @param settings - Partial settings that changed
-   * @param excludeTabId - Optional tab ID to exclude (the one that initiated the change)
+   * Notify a content script to refresh its state from storage
+   * @param tabId - The tab ID to notify
+   * @param reason - The reason for the refresh
    */
-  private async broadcastSettingsChange(
-    settings: Partial<ExtensionSettings>,
-    excludeTabId?: number,
+  private async notifyContentScript(
+    tabId: number,
+    reason: RefreshStateReason,
   ): Promise<void> {
     try {
-      const settingsMessage: SettingsChangeMessage = {
-        type: "SETTINGS_CHANGE",
-        payload: settings,
+      const message: RefreshStateMessage = {
+        type: "REFRESH_STATE",
+        payload: { reason },
         id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
         timestamp: Date.now(),
       };
 
-      const tabs = await browser.tabs.query({});
-      for (const tab of tabs) {
-        if (tab.id && tab.id !== excludeTabId) {
-          try {
-            await browser.tabs.sendMessage(tab.id, settingsMessage);
-          } catch {
-            // Content script may not be loaded on this tab - this is normal
-          }
-        }
-      }
-    } catch (error) {
-      console.error("BackgroundService.broadcastSettingsChange error:", error);
+      await browser.tabs.sendMessage(tabId, message);
+    } catch {
+      // Content script may not be loaded on this tab - this is normal
     }
   }
 
   /**
-   * Send session update to a specific tab
+   * Send refresh signal to tabs with a specific domain
+   * @param domain - The domain to match
+   * @param reason - The reason for the refresh
    */
-  private async sendSessionUpdate(activeTab: ActiveTab): Promise<void> {
+  private async notifyDomainTabs(
+    domain: string,
+    reason: RefreshStateReason,
+  ): Promise<void> {
     try {
-      const currentTime = this.timeTracker.getCurrentDisplayTime();
-
-      const updateMessage: SessionUpdateMessage = {
-        type: "SESSION_UPDATE",
-        payload: {
-          domain: activeTab.domain,
-          currentTime,
-          isActive: activeTab.active,
-          isPaused: !activeTab.active,
-          startTime: activeTab.lastActivated,
-        },
-        id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-        timestamp: Date.now(),
-      };
-
-      // Get current settings to push alongside session update
-      const settings = await this.settingsRepository.getSettings();
-      const settingsMessage: SettingsChangeMessage = {
-        type: "SETTINGS_CHANGE",
-        payload: {
-          pillPosition: settings.pillPosition,
-          pillVisibility: settings.pillVisibility,
-        },
-        id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-        timestamp: Date.now(),
-      };
-
-      // Send to all tabs with matching domain
       const tabs = await browser.tabs.query({});
       for (const tab of tabs) {
         if (tab.id && tab.url) {
-          const domain = this.timeTracker.extractDomain(tab.url);
-          if (domain === activeTab.domain) {
-            try {
-              await browser.tabs.sendMessage(tab.id, updateMessage);
-              // Push settings alongside session update
-              await browser.tabs.sendMessage(tab.id, settingsMessage);
-            } catch (error) {
-              // Content script may not be loaded on this tab - this is normal
-              console.debug(`Failed to send message to tab ${tab.id}:`, error);
-            }
+          const tabDomain = this.timeTracker.extractDomain(tab.url);
+          if (tabDomain === domain) {
+            await this.notifyContentScript(tab.id, reason);
           }
         }
       }
     } catch (error) {
-      console.error("BackgroundService.sendSessionUpdate error:", error);
+      console.error("BackgroundService.notifyDomainTabs error:", error);
     }
   }
 
@@ -460,8 +411,8 @@ export class BackgroundService {
         activeInfo.windowId,
       );
 
-      // Broadcast session update to content scripts
-      await this.sendSessionUpdate(newActiveTab);
+      // Notify content scripts to refresh state from storage
+      await this.notifyDomainTabs(newActiveTab.domain, "tab_activated");
 
       console.log(`Started tracking session for domain: ${domain}`);
     } catch (error) {
@@ -508,8 +459,8 @@ export class BackgroundService {
         tab.windowId!,
       );
 
-      // Broadcast session update to content scripts
-      await this.sendSessionUpdate(newActiveTab);
+      // Notify content scripts to refresh state from storage
+      await this.notifyDomainTabs(newActiveTab.domain, "navigation");
 
       console.log(
         `URL changed - started tracking session for domain: ${domain}`,
@@ -535,7 +486,7 @@ export class BackgroundService {
         // Window lost focus - pause tracking
         const pausedTab = await this.timeTracker.pauseSession();
         if (pausedTab) {
-          await this.sendSessionUpdate(pausedTab);
+          await this.notifyDomainTabs(pausedTab.domain, "tab_activated");
         }
         console.log("Window lost focus - paused tracking");
       } else {
@@ -543,7 +494,7 @@ export class BackgroundService {
         if (!activeTab.active) {
           const resumedTab = await this.timeTracker.resumeSession();
           if (resumedTab) {
-            await this.sendSessionUpdate(resumedTab);
+            await this.notifyDomainTabs(resumedTab.domain, "tab_activated");
           }
           console.log("Window gained focus - resumed tracking");
         }
@@ -600,8 +551,8 @@ export class BackgroundService {
         tab.windowId!,
       );
 
-      // Broadcast session update to content scripts
-      await this.sendSessionUpdate(newActiveTab);
+      // Notify content scripts to refresh state from storage
+      await this.notifyDomainTabs(newActiveTab.domain, "navigation");
 
       console.log(
         `Navigation completed - started tracking session for domain: ${domain}`,
@@ -684,3 +635,31 @@ export class BackgroundService {
     console.error("Failed to bootstrap background service:", error);
   }
 })();
+
+/**
+ * Handle extension install/update events
+ * Notifies existing content scripts to refresh their state from storage
+ */
+browser.runtime.onInstalled.addListener(async (details) => {
+  console.log(`Extension ${details.reason}: notifying existing tabs`);
+
+  // Wait a short moment for content scripts to be ready
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  // Notify all HTTP/HTTPS tabs to refresh their state
+  const tabs = await browser.tabs.query({});
+  for (const tab of tabs) {
+    if (tab.id && tab.url?.startsWith("http")) {
+      try {
+        await browser.tabs.sendMessage(tab.id, {
+          type: "REFRESH_STATE",
+          payload: { reason: "service_ready" },
+          id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+          timestamp: Date.now(),
+        });
+      } catch {
+        // Content script may not be loaded on this tab - this is expected
+      }
+    }
+  }
+});

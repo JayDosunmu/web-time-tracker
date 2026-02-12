@@ -5,7 +5,7 @@
 import { testUtils } from '../../../tests/utils';
 import { MessageRouter } from './MessageRouter';
 import type {
-  SessionUpdateMessage,
+  RefreshStateMessage,
   MessageResponse
 } from '../../../types';
 
@@ -205,18 +205,14 @@ describe('MessageRouter', () => {
       mockHandler1 = jest.fn();
     });
 
-    it('should call registered handler for session update', async () => {
+    it('should call registered handler for refresh state', async () => {
       mockHandler1.mockResolvedValue({ success: true });
-      messageRouter.registerHandler<SessionUpdateMessage>('SESSION_UPDATE', mockHandler1);
+      messageRouter.registerHandler<RefreshStateMessage>('REFRESH_STATE', mockHandler1);
 
-      const message: SessionUpdateMessage = {
-        type: 'SESSION_UPDATE',
+      const message: RefreshStateMessage = {
+        type: 'REFRESH_STATE',
         payload: {
-          domain: 'example.com',
-          currentTime: 5000,
-          isActive: true,
-          isPaused: false,
-          startTime: 1000
+          reason: 'tab_activated'
         },
         id: 'test-id',
         timestamp: Date.now()
