@@ -66,7 +66,6 @@ export const Pill: FunctionComponent<PillProps> = ({
   isConnecting,
   onPositionChange,
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
 
@@ -183,15 +182,6 @@ export const Pill: FunctionComponent<PillProps> = ({
     };
   }, [isDragging, onPositionChange]);
 
-  const handleMouseEnter = (): void => {
-    if (!isDragging) {
-      setIsHovered(true);
-    }
-  };
-
-  const handleMouseLeave = (): void => {
-    setIsHovered(false);
-  };
 
   // Hide pill completely if not visible
   if (!visible) {
@@ -212,8 +202,6 @@ export const Pill: FunctionComponent<PillProps> = ({
         class={pillClass}
         style={positionStyle}
         onMouseDown={handleMouseDown}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         <span class="time-display">--:--:--</span>
       </div>
@@ -229,7 +217,6 @@ export const Pill: FunctionComponent<PillProps> = ({
     'pill-content',
     !isActive ? 'inactive' : '',
     isPaused ? 'paused' : '',
-    isHovered && !isDragging ? 'hovered' : '',
     isDragging ? 'dragging' : '',
   ].filter(Boolean).join(' ');
 
@@ -239,14 +226,8 @@ export const Pill: FunctionComponent<PillProps> = ({
       class={pillClass}
       style={positionStyle}
       onMouseDown={handleMouseDown}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
     >
-      {!isHovered && (
-        <>
-          <span class="time-display">{formatTime(displayTime)}</span>
-        </>
-      )}
+      <span class="time-display">{formatTime(displayTime)}</span>
     </div>
   );
 };

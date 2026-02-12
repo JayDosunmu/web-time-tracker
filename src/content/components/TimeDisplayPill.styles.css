@@ -9,55 +9,37 @@
   font-size: 11px;
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
-  cursor: grab;
   user-select: none;
   opacity: 0.90;
-}
-
-.pill-content:hover {
-  opacity: 1;
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: background 0.25s ease, color 0.25s ease, outline 0.25s ease;
 }
 
 .pill-content.paused {
-  background: #fefce8;
-  color: #854d0e;
-  border-color: #fde047;
+  color: #64748b;
+  border-color: #1b72e2;
 }
 
 .pill-content.inactive {
-  background: #f1f5f9;
   color: #64748b;
+  border-color: #1b72e2;
   opacity: 0.8;
 }
 
 .pill-content.connecting {
-  background: #f8fafc;
   color: #64748b;
   opacity: 0.9;
 }
 
-.pill-content.hovered {
-  background: transparent;
-  border: 2px dashed #94a3b8;
+.pill-content:hover {
+  outline: 2px dashed red;
   box-shadow: none;
-  padding: 6px 10px;
-  min-width: 60px;
-  min-height: 16px;
-  opacity: 0.6;
-}
-
-.pill-content.hovered:hover {
-  transform: none;
-  opacity: 0.8;
+  background: transparent;
+  color: transparent;
 }
 
 .pill-content.dragging {
   cursor: grabbing;
-  opacity: 0.9;
-  transform: scale(1.02);
+  opacity: 0.8;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }
 
