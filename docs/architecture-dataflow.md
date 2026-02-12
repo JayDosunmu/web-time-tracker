@@ -72,9 +72,13 @@ flowchart TD
     TR --> activeTab
     SR --> settings
 
-    %% Session updates broadcast to content scripts
-    BS -.->|"SESSION_UPDATE"| CSM
+    %% Session updates signal to content scripts
+    BS -.->|"REFRESH_STATE"| CSM
     CSM --> TDP
+
+    %% Content script direct storage access
+    CSM -.-> activeTab
+    CSM -.-> settings
 
     %% Popup reads storage directly
     APP --> activeTab
@@ -347,55 +351,68 @@ All date operations use **local timezone** to match user expectations.
 
 ## Message Flow
 
-> **Architecture Decision:** Settings use a **push-based model** for reliability. See [ADR-0001: Push-Based Settings](adr/0001-push-based-settings.md).
+> **Architecture Decision:** Content scripts read data directly from storage via shared repositories. Background sends `REFRESH_STATE` signals to notify when data changes. See [ADR-0002: Shared Storage Layer](adr/0002-shared-storage-layer.md).
 
 ### Content Script → Background
 
+Content scripts send position updates and error reports to background:
+
 ```mermaid
 sequenceDiagram
+    participant TDP as TimeDisplayPill
     participant CS as ContentScriptManager
     participant MR as MessageRouter
     participant RT as browser.runtime
     participant BS as BackgroundService
 
-    CS->>MR: requestSessionState(domain)
+    TDP->>CS: positionCallback(position, "user_drag")
+    CS->>MR: sendMessage(UPDATE_PILL_POSITION)
     MR->>MR: Generate message ID
-    MR->>RT: sendMessage(GET_SESSION_STATE)
+    MR->>RT: sendMessage(UPDATE_PILL_POSITION)
     RT->>BS: onMessage
-    BS->>BS: getActiveSession()
+    BS->>BS: Save position, send REFRESH_STATE to other tabs
     BS-->>RT: MessageResponse
     RT-->>MR: response
-    MR-->>CS: { success, data }
+    MR-->>CS: { success: true }
 ```
 
-### Background → Content Script
+### Background → Content Script (Signal-Based)
+
+Background sends lightweight `REFRESH_STATE` signals. Content scripts read data directly from storage:
 
 ```mermaid
 sequenceDiagram
     participant BS as BackgroundService
-    participant TT as TimeTracker
+    participant DMM as DataModelManager
+    participant Storage as browser.storage.local
     participant RT as browser.tabs
+    participant MR as MessageRouter
     participant CS as ContentScriptManager
+    participant SR as SettingsRepository
+    participant TR as TabRepository
     participant TDP as TimeDisplayPill
 
-    BS->>TT: startSession()
-    TT-->>BS: ActiveSession
-    BS->>BS: Build SESSION_UPDATE
-    BS->>BS: Build SETTINGS_CHANGE
-    BS->>RT: sendMessage(tabId, SESSION_UPDATE)
-    BS->>RT: sendMessage(tabId, SETTINGS_CHANGE)
-    RT->>CS: onMessage (SESSION_UPDATE)
+    BS->>DMM: Handle tab event
+    DMM->>Storage: Write activeTab
+    BS->>BS: Build REFRESH_STATE signal
+    BS->>RT: sendMessage(tabId, REFRESH_STATE)
+    RT->>MR: onMessage(REFRESH_STATE)
+    MR->>CS: handleRefreshState()
+    CS->>CS: readStateFromStorage()
+    CS->>SR: getSettings()
+    CS->>TR: getActiveTab()
+    SR->>Storage: get(['settings'])
+    TR->>Storage: get(['activeTab'])
+    Storage-->>CS: settings, activeTab
     CS->>CS: broadcastToComponents()
     CS->>TDP: onSessionUpdate(state)
-    TDP->>TDP: Start animation loop
-    RT->>CS: onMessage (SETTINGS_CHANGE)
     CS->>TDP: onSettingsChange(settings)
-    TDP->>TDP: Apply position/visibility
+    TDP->>TDP: Apply state and settings
 ```
 
-### Push-Based Settings Flow
+### Signal-Based State Refresh Flow
 
-Settings changes are pushed from background to content scripts rather than pulled. This ensures reliability even when the service worker is suspended.
+State changes trigger `REFRESH_STATE` signals. Content scripts then read fresh data from storage:
 
 ```mermaid
 flowchart TD
@@ -406,44 +423,56 @@ flowchart TD
     end
 
     subgraph Background["Background Service"]
-        wake["Service Worker Wakes"]
-        push["Push SETTINGS_CHANGE"]
-        broadcast["broadcastSettingsChange()"]
+        write["Write to Storage"]
+        signal["Send REFRESH_STATE"]
     end
 
     subgraph ContentScript["Content Script"]
-        receive["Receive Message"]
-        apply["Apply Settings"]
+        receive["Receive Signal"]
+        read["Read from Storage<br/>(via Repositories)"]
+        apply["Apply State + Settings"]
     end
 
-    tab --> wake
-    nav --> wake
-    wake --> push
-    push --> receive
-    receive --> apply
+    subgraph Storage["browser.storage.local"]
+        data["activeTab, settings"]
+    end
 
-    drag -->|"UPDATE_PILL_POSITION<br/>source: user_drag"| broadcast
-    broadcast -->|"SETTINGS_CHANGE<br/>(excludes origin tab)"| receive
+    tab --> write
+    nav --> write
+    drag --> write
+    write --> data
+    write --> signal
+    signal --> receive
+    receive --> read
+    read --> data
+    data --> apply
 ```
 
 ### Position Sync Flow
 
-When a user drags the pill, the position syncs across all tabs:
+When a user drags the pill, the position syncs across all tabs via signal:
 
 ```mermaid
 sequenceDiagram
     participant TabA as Tab A (TimeDisplayPill)
-    participant MR as MessageRouter
+    participant MR_A as MessageRouter (Tab A)
     participant BS as BackgroundService
     participant SR as SettingsRepository
+    participant Storage as browser.storage.local
+    participant MR_B as MessageRouter (Tab B)
+    participant CS_B as ContentScriptManager (Tab B)
     participant TabB as Tab B (TimeDisplayPill)
 
     TabA->>TabA: User drags pill
-    TabA->>MR: UPDATE_PILL_POSITION {source: "user_drag"}
-    MR->>BS: sendMessage()
+    TabA->>MR_A: UPDATE_PILL_POSITION {source: "user_drag"}
+    MR_A->>BS: sendMessage()
     BS->>SR: updateSettings({pillPosition})
-    BS->>BS: broadcastSettingsChange(excludeTabId: TabA)
-    BS->>TabB: SETTINGS_CHANGE {pillPosition}
+    SR->>Storage: set({settings})
+    BS->>MR_B: REFRESH_STATE {reason: "settings_changed"}
+    MR_B->>CS_B: handleRefreshState()
+    CS_B->>Storage: Read via SettingsRepository
+    Storage-->>CS_B: settings with new position
+    CS_B->>TabB: onSettingsChange({pillPosition})
     TabB->>TabB: Apply position (no save back)
 ```
 

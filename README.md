@@ -7,8 +7,7 @@ A Firefox extension that tracks time spent on different websites. It displays a 
 ### Timer Pill
 - **Floating Timer Display** -- always-visible overlay showing elapsed time in HH:MM:SS format
 - **Draggable Positioning** -- drag the pill to any position on screen; position persists across sessions
-- **Hover-to-Hide** -- mouseover hides the pill content, showing only a subtle border indicator for its position
-- **Connection Status** -- displays `--:--:--` while connecting to background service
+- **Hover-to-Hide** -- mouseover hides the pill content, showing only a border indicator for its position
 
 ### Time Tracking
 - **Per-Domain Tracking** -- time is tracked separately for each website domain

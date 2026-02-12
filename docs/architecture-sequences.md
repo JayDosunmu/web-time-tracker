@@ -67,16 +67,14 @@ sequenceDiagram
 
     DMM-->>BS: ActiveTab
 
-    BS->>BS: Build SESSION_UPDATE message
-    BS->>BS: Build SETTINGS_CHANGE message
-    BS->>MR: browser.tabs.sendMessage(tabId, SESSION_UPDATE)
-    MR->>CSM: handleMessage(SESSION_UPDATE)
+    BS->>BS: Build REFRESH_STATE signal
+    BS->>MR: browser.tabs.sendMessage(tabId, REFRESH_STATE)
+    MR->>CSM: handleMessage(REFRESH_STATE)
+    CSM->>CSM: readStateFromStorage()
+    CSM->>CSM: Read from TabRepository + SettingsRepository
     CSM->>CSM: broadcastToComponents('onSessionUpdate')
     CSM->>TDP: onSessionUpdate(sessionState)
     TDP->>TDP: Start requestAnimationFrame loop
-
-    BS->>MR: browser.tabs.sendMessage(tabId, SETTINGS_CHANGE)
-    MR->>CSM: handleMessage(SETTINGS_CHANGE)
     CSM->>TDP: onSettingsChange(settings)
     TDP->>TDP: Apply position/visibility
 ```
@@ -152,9 +150,11 @@ sequenceDiagram
         TR->>Storage: set({ activeTab })
         DMM-->>BS: pausedActiveTab
 
-        BS->>BS: Build SESSION_UPDATE (isActive: false)
-        BS->>MR: browser.tabs.sendMessage()
-        MR->>TDP: onSessionUpdate()
+        BS->>BS: Build REFRESH_STATE signal
+        BS->>MR: browser.tabs.sendMessage(REFRESH_STATE)
+        MR->>CSM: handleMessage(REFRESH_STATE)
+        CSM->>CSM: readStateFromStorage()
+        CSM->>TDP: onSessionUpdate(state with isActive: false)
         TDP->>TDP: Stop animation, show paused state
     else Window gained focus
         alt Session was paused (active = false)
@@ -165,9 +165,11 @@ sequenceDiagram
             TR->>Storage: set({ activeTab })
             DMM-->>BS: resumedActiveTab
 
-            BS->>BS: Build SESSION_UPDATE (isActive: true)
-            BS->>MR: browser.tabs.sendMessage()
-            MR->>TDP: onSessionUpdate()
+            BS->>BS: Build REFRESH_STATE signal
+            BS->>MR: browser.tabs.sendMessage(REFRESH_STATE)
+            MR->>CSM: handleMessage(REFRESH_STATE)
+            CSM->>CSM: readStateFromStorage()
+            CSM->>TDP: onSessionUpdate(state with isActive: true)
             TDP->>TDP: Restart animation loop
         end
     end
@@ -335,105 +337,104 @@ sequenceDiagram
 
 When a content script initializes on page load:
 
+> **Architecture Decision:** Content scripts use shared repositories for direct storage access, eliminating dependency on background service. See [ADR-0002: Shared Storage Layer](adr/0002-shared-storage-layer.md).
+
 ```mermaid
 sequenceDiagram
     autonumber
     participant Browser as Browser
     participant CSM as ContentScriptManager
     participant MR as MessageRouter
+    participant SR as SettingsRepository
+    participant TR as TabRepository
+    participant Storage as browser.storage.local
     participant TDP as TimeDisplayPill
-    participant BS as BackgroundService
-    participant SM as StorageManager
 
     Browser->>CSM: Content script injected
     CSM->>CSM: getInstance() [Singleton]
     CSM->>CSM: extractDomain(location.href)
 
+    CSM->>SR: getInstance(browser.storage.local)
+    CSM->>TR: getInstance(browser.storage.local)
+
     CSM->>MR: initialize()
-    MR->>MR: Register SESSION_UPDATE handler
-    MR->>MR: Register SETTINGS_CHANGE handler
+    MR->>MR: Register REFRESH_STATE handler
     MR->>Browser: Register runtime.onMessage listener
 
     CSM->>CSM: Wait for DOMContentLoaded
 
-    CSM->>TDP: new TimeDisplayPill()
+    CSM->>SR: getSettings()
+    SR->>Storage: get(['settings'])
+    Storage-->>SR: settings
+    SR-->>CSM: settings (position, visibility)
+
+    CSM->>TDP: new TimeDisplayPill(initialPosition)
     TDP->>TDP: Create closed Shadow DOM
     TDP->>TDP: Mount to document.body
-    TDP->>TDP: Set isConnecting = true
-    TDP->>TDP: Render connecting state ("--:--:--")
 
     CSM->>CSM: registerComponent('timeDisplayPill', pill)
-    CSM->>CSM: Setup visibility change handler
+    CSM->>TDP: onSettingsChange(settings)
+    TDP->>TDP: Apply visibility setting
 
-    loop Retry with exponential backoff (max 5 attempts)
-        CSM->>CSM: Check AbortController signal
-        CSM->>MR: requestSessionState(domain)
-        MR->>BS: GET_SESSION_STATE
+    CSM->>CSM: readStateFromStorage()
+    CSM->>TR: getActiveTab()
+    TR->>Storage: get(['activeTab'])
+    Storage-->>TR: activeTab
+    TR-->>CSM: activeTab
 
-        alt Background ready
-            BS->>SM: getActiveSession()
-            SM-->>BS: activeSession
-            BS-->>MR: { success: true, data: sessionState }
-            MR-->>CSM: response
-            CSM->>TDP: onSessionUpdate(state)
-            TDP->>TDP: Set isConnecting = false
-            TDP->>TDP: Start animation or show inactive
-            Note over CSM: Break retry loop
-        else Background not ready (service worker suspended)
-            MR-->>CSM: { success: false, error: "No response..." }
-            CSM->>CSM: Wait (100ms × 2^attempt)
-            Note over CSM: Continue retry loop
-        end
+    alt ActiveTab matches current domain
+        CSM->>CSM: Build sessionState from activeTab
+        CSM->>TDP: onSessionUpdate(sessionState)
+        TDP->>TDP: Start animation loop
+    else No matching session
+        CSM->>TDP: onSessionUpdate(null)
+        TDP->>TDP: Show inactive state
     end
 
-    Note over CSM: Visibility change handler will<br/>request fresh state when tab<br/>becomes visible again
+    CSM->>CSM: Setup visibility change handler
+
+    Note over CSM: Visibility change handler will<br/>read fresh state from storage when tab<br/>becomes visible again
 ```
 
-**Retry Logic Details:**
+**Direct Storage Access:**
 
-| Attempt | Delay | Cumulative Wait |
-|---------|-------|-----------------|
-| 1 | 100ms | 100ms |
-| 2 | 200ms | 300ms |
-| 3 | 400ms | 700ms |
-| 4 | 800ms | 1.5s |
-| 5 | 1600ms | 3.1s |
-
-The retry detects "No response" or "Could not establish connection" errors which indicate the service worker is suspended.
+Content scripts read state directly from `browser.storage.local` via shared repositories. This eliminates the need for retry logic since storage is always available, even when the background service worker is suspended.
 
 ---
 
-## Settings Change Broadcast (Push-Based)
+## State Refresh Signal (Signal-Based)
 
-> **Architecture Decision:** Settings use a push-based model. See [ADR-0001](adr/0001-push-based-settings.md).
+> **Architecture Decision:** Background sends lightweight `REFRESH_STATE` signals. Content scripts read data from storage via repositories. See [ADR-0002](adr/0002-shared-storage-layer.md).
 
-Settings are pushed alongside session updates when the background wakes, and when users drag the pill:
+When state changes, background signals content scripts to refresh from storage:
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Browser as Browser Event
     participant BS as BackgroundService
-    participant SR as SettingsRepository
+    participant DMM as DataModelManager
+    participant TR as TabRepository
     participant Storage as browser.storage.local
     participant Tabs as browser.tabs
     participant MR as MessageRouter
+    participant CSM as ContentScriptManager
     participant TDP as TimeDisplayPill
 
     Browser->>BS: Tab activated / Navigation
-    BS->>BS: Handle session change
-    BS->>SR: getSettings()
-    SR->>Storage: get(['settings'])
-    Storage-->>SR: settings
-    SR-->>BS: settings
+    BS->>DMM: Handle session change
+    DMM->>TR: setActiveTab(activeTab)
+    TR->>Storage: set({ activeTab })
 
-    BS->>BS: Build SESSION_UPDATE message
-    BS->>BS: Build SETTINGS_CHANGE message
-    BS->>Tabs: sendMessage(tabId, SESSION_UPDATE)
-    BS->>Tabs: sendMessage(tabId, SETTINGS_CHANGE)
-    Tabs->>MR: onMessage
-    MR->>TDP: onSessionUpdate(state)
-    MR->>TDP: onSettingsChange(settings)
+    BS->>BS: Build REFRESH_STATE signal
+    BS->>Tabs: sendMessage(tabId, REFRESH_STATE)
+    Tabs->>MR: onMessage(REFRESH_STATE)
+    MR->>CSM: handleRefreshState()
+    CSM->>CSM: readStateFromStorage()
+    CSM->>Storage: Read via TabRepository + SettingsRepository
+    Storage-->>CSM: activeTab, settings
+    CSM->>TDP: onSessionUpdate(state)
+    CSM->>TDP: onSettingsChange(settings)
     TDP->>TDP: Apply state and settings
 ```
 
@@ -454,6 +455,7 @@ sequenceDiagram
     participant Storage as browser.storage.local
     participant Tabs as browser.tabs
     participant MR_B as MessageRouter (Tab B)
+    participant CSM_B as ContentScriptManager (Tab B)
     participant TDP_B as TimeDisplayPill (Tab B)
 
     User->>TDP_A: Drag pill to new position
@@ -465,15 +467,18 @@ sequenceDiagram
     BS->>SR: updateSettings({pillPosition})
     SR->>Storage: set({settings})
 
-    Note over BS: source === "user_drag" triggers broadcast
+    Note over BS: source === "user_drag" triggers REFRESH_STATE
 
-    BS->>BS: broadcastSettingsChange(excludeTabId: Tab A)
     BS->>Tabs: query({}) - get all tabs
     Tabs-->>BS: [Tab A, Tab B, ...]
 
     loop For each tab except Tab A
-        BS->>MR_B: SETTINGS_CHANGE {pillPosition}
-        MR_B->>TDP_B: onSettingsChange({pillPosition})
+        BS->>MR_B: REFRESH_STATE {reason: "settings_changed"}
+        MR_B->>CSM_B: handleRefreshState()
+        CSM_B->>CSM_B: readStateFromStorage()
+        CSM_B->>Storage: Read via SettingsRepository
+        Storage-->>CSM_B: settings with new pillPosition
+        CSM_B->>TDP_B: onSettingsChange({pillPosition})
         TDP_B->>TDP_B: Apply position (no save back)
     end
 ```
@@ -539,15 +544,15 @@ sequenceDiagram
 
 | Trigger | Event | Handler | Lifecycle | Result |
 |---------|-------|---------|-----------|--------|
-| Tab switch | `tabs.onActivated` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Broadcast SESSION_UPDATE + SETTINGS_CHANGE |
-| URL change | `tabs.onUpdated` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Broadcast SESSION_UPDATE + SETTINGS_CHANGE |
-| Navigation complete | `webNavigation.onCompleted` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Broadcast SESSION_UPDATE + SETTINGS_CHANGE |
-| Window focus lost | `windows.onFocusChanged` | BackgroundService → DataModelManager | pauseSession() | Record time → Set inactive → Broadcast |
-| Window focus gained | `windows.onFocusChanged` | BackgroundService → DataModelManager | resumeSession() | Set active → Broadcast |
+| Tab switch | `tabs.onActivated` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Send REFRESH_STATE |
+| URL change | `tabs.onUpdated` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Send REFRESH_STATE |
+| Navigation complete | `webNavigation.onCompleted` | BackgroundService → DataModelManager | TAB_EXIT → TAB_ENTER | Record time → Start new → Send REFRESH_STATE |
+| Window focus lost | `windows.onFocusChanged` | BackgroundService → DataModelManager | pauseSession() | Record time → Set inactive → Send REFRESH_STATE |
+| Window focus gained | `windows.onFocusChanged` | BackgroundService → DataModelManager | resumeSession() | Set active → Send REFRESH_STATE |
 | Hour boundary | `setTimeout` | DataModelManager | HOUR_ELAPSED | Record time → Reset checkpoint |
 | Day boundary | `setTimeout` | DataModelManager | DAY_ELAPSED | Record time → Reset totals → Clear expired |
-| SPA navigation | `popstate`/`pushState` | ContentScriptManager | Request state | Request session state → Update pill |
-| Tab visibility | `visibilitychange` | ContentScriptManager | Request state | Request fresh state → Update pill |
+| SPA navigation | `popstate`/`pushState` | ContentScriptManager | Read storage | Read state from repositories → Update pill |
+| Tab visibility | `visibilitychange` | ContentScriptManager | Read storage | Read fresh state from repositories → Update pill |
 | Page unload | `beforeunload` | ContentScriptManager | Cleanup | Destroy components → Cleanup |
-| User drags pill | `mouseup` | TimeDisplayPill → BackgroundService | UPDATE_PILL_POSITION | Save position → Broadcast SETTINGS_CHANGE (excl. origin) |
+| User drags pill | `mouseup` | TimeDisplayPill → BackgroundService | UPDATE_PILL_POSITION | Save position → Send REFRESH_STATE (excl. origin) |
 | Window resize | `resize` | TimeDisplayPill → BackgroundService | UPDATE_PILL_POSITION | Save position (no broadcast) |

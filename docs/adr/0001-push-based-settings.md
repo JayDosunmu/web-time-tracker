@@ -2,7 +2,9 @@
 
 **Date:** 2026-02-11
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0002: Shared Storage Layer](0002-shared-storage-layer.md)
+
+> **Note:** This ADR describes the intermediate push-based architecture using `SESSION_UPDATE` and `SETTINGS_CHANGE` messages. ADR-0002 supersedes this with a signal-based architecture where content scripts read directly from storage via shared repositories, and background sends lightweight `REFRESH_STATE` signals instead of data-carrying messages.
 
 ## Decision
 
