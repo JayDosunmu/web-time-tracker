@@ -16,9 +16,11 @@ import type {
   Day,
   LifecycleEventContext,
 } from "../../../types";
-import { HistoryRepository } from "../repositories/HistoryRepository";
-import type { TabRepository } from "../repositories/TabRepository";
-import type { SettingsRepository } from "../repositories/SettingsRepository";
+import {
+  HistoryRepository,
+  type TabRepository,
+  type SettingsRepository,
+} from "../../shared/repositories";
 
 export class DataModelManager {
   private static instance: DataModelManager | null = null;

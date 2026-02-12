@@ -122,9 +122,17 @@ export const Pill: FunctionComponent<PillProps> = ({
     };
   }, [updateBoundsAndPosition, position.x, position.y]);
 
-  // Track external position updates (from settings push) - update ref without saving
+  // Sync external position updates (from settings) to local state
+  // This ensures position is applied even when pill was hidden during the update
   useEffect(() => {
     prevPositionRef.current = position;
+    setClampedPosition(prev => {
+      // Only update if position actually changed (avoid unnecessary re-renders during drag)
+      if (prev.x !== position.x || prev.y !== position.y) {
+        return position;
+      }
+      return prev;
+    });
   }, [position.x, position.y]);
 
   // Drag handlers

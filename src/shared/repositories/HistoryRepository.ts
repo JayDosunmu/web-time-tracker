@@ -10,7 +10,7 @@ import {
   getDateKey,
   getMidnightTimestamp,
   DAY_STORAGE_PREFIX,
-} from "../../shared/dateUtils";
+} from "../dateUtils";
 
 type StorageArea = browser.storage.StorageArea;
 

@@ -54,19 +54,18 @@ export interface SessionStateResponseMessage extends ExtensionMessage {
   payload: SessionStatePayload | null;
 }
 
-// Session update broadcast from background to content scripts
-export interface SessionUpdateMessage extends ExtensionMessage {
-  type: "SESSION_UPDATE";
-  payload: SessionStatePayload;
-}
+// Refresh state reason discriminator
+export type RefreshStateReason =
+  | "tab_activated"
+  | "navigation"
+  | "settings_changed"
+  | "service_ready";
 
-// Settings change notification
-export interface SettingsChangeMessage extends ExtensionMessage {
-  type: "SETTINGS_CHANGE";
+// Signal content script to refresh state from storage
+export interface RefreshStateMessage extends ExtensionMessage {
+  type: "REFRESH_STATE";
   payload: {
-    pillPosition?: PillPosition;
-    pillVisibility?: boolean;
-    excludedDomains?: string[];
+    reason: RefreshStateReason;
   };
 }
 
@@ -102,8 +101,7 @@ export interface ErrorReportMessage extends ExtensionMessage {
 export type ExtensionMessageUnion =
   | GetSessionStateMessage
   | SessionStateResponseMessage
-  | SessionUpdateMessage
-  | SettingsChangeMessage
+  | RefreshStateMessage
   | GetSettingsMessage
   | UpdatePillPositionMessage
   | ErrorReportMessage;
