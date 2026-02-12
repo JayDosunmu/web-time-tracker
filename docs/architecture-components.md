@@ -20,11 +20,11 @@ graph TB
         TT["TimeTracker<br/><i>Session Management</i>"]
     end
 
-    subgraph Repositories["Repository Layer"]
+    subgraph Repositories["Shared Repository Layer"]
         HR["HistoryRepository<br/><i>Days/Hours</i>"]
         TR["TabRepository<br/><i>Active Tab</i>"]
         SR["SettingsRepository<br/><i>User Prefs</i>"]
-        SM["StorageManager<br/><i>Generic Storage</i>"]
+        SM["StorageManager<br/><i>Generic CRUD</i>"]
     end
 
     subgraph Content["Content Script Layer (per tab)"]
@@ -53,11 +53,13 @@ graph TB
     SR --> SM
     SM --> storage
 
-    %% Message passing
-    BS <-.->|"SESSION_UPDATE<br/>SETTINGS_CHANGE"| runtime
-    runtime <-.->|"GET_SESSION_STATE<br/>ERROR_REPORT"| MR
+    %% Message passing (signal-based)
+    BS -.->|"REFRESH_STATE"| runtime
+    runtime -.->|"UPDATE_PILL_POSITION<br/>ERROR_REPORT"| BS
 
-    %% Content script internal flow
+    %% Content script direct storage access
+    CSM --> TR
+    CSM --> SR
     MR --> CSM
     CSM --> TDP
 
@@ -77,12 +79,14 @@ graph TB
 
 ### Repository Layer
 
+> **Architecture Decision:** Repositories are in a **shared module** accessible from both background and content scripts. See [ADR-0002: Shared Storage Layer](adr/0002-shared-storage-layer.md) for rationale.
+
 | Component | File | Purpose |
 |-----------|------|---------|
-| **HistoryRepository** | [src/background/repositories/HistoryRepository.ts](../src/background/repositories/HistoryRepository.ts) | Data access for History, Day, and Hour records. Manages per-day storage keys (`day_YYYY-MM-DD`), hour-level aggregations, and data retention cleanup |
-| **TabRepository** | [src/background/repositories/TabRepository.ts](../src/background/repositories/TabRepository.ts) | Data access for ActiveTab state. Manages the currently tracked domain with totalTime, visit timestamps, and timer checkpoints |
-| **SettingsRepository** | [src/background/repositories/SettingsRepository.ts](../src/background/repositories/SettingsRepository.ts) | Data access for ExtensionSettings. Manages user preferences including pill position, visibility, retention days, and excluded domains |
-| **StorageManager** | [src/background/models/StorageManager.ts](../src/background/models/StorageManager.ts) | Generic type-safe abstraction over `browser.storage.local` used by repositories |
+| **HistoryRepository** | [src/shared/repositories/HistoryRepository.ts](../src/shared/repositories/HistoryRepository.ts) | Data access for History, Day, and Hour records. Manages per-day storage keys (`day_YYYY-MM-DD`), hour-level aggregations, and data retention cleanup |
+| **TabRepository** | [src/shared/repositories/TabRepository.ts](../src/shared/repositories/TabRepository.ts) | Data access for ActiveTab state. Manages the currently tracked domain with totalTime, visit timestamps, and timer checkpoints |
+| **SettingsRepository** | [src/shared/repositories/SettingsRepository.ts](../src/shared/repositories/SettingsRepository.ts) | Data access for ExtensionSettings. Manages user preferences including pill position, visibility, retention days, and excluded domains |
+| **StorageManager** | [src/shared/storage/StorageManager.ts](../src/shared/storage/StorageManager.ts) | Pure generic CRUD abstraction over `browser.storage.local` used by repositories |
 
 ### Content Script Layer
 
@@ -104,36 +108,40 @@ graph TB
 
 Messages flow between Background and Content Script layers via `browser.runtime.sendMessage` and `browser.tabs.sendMessage`.
 
-> **Architecture Decision:** Settings are delivered using a **push-based model** for reliability. See [ADR-0001: Push-Based Settings](adr/0001-push-based-settings.md) for rationale.
+> **Architecture Decision:** Content scripts read data directly from storage via shared repositories. Background sends lightweight `REFRESH_STATE` signals to notify content scripts when state changes. See [ADR-0002: Shared Storage Layer](adr/0002-shared-storage-layer.md) for rationale.
 
 ```mermaid
 graph LR
     subgraph Content["Content Script"]
         MR["MessageRouter"]
+        Repos["Repositories<br/>(direct storage read)"]
     end
 
     subgraph Background["Background Service"]
         BS["BackgroundService"]
     end
 
-    MR -->|"GET_SESSION_STATE"| BS
-    MR -->|"GET_SETTINGS"| BS
+    subgraph Storage["browser.storage.local"]
+        ST["Storage"]
+    end
+
     MR -->|"UPDATE_PILL_POSITION"| BS
     MR -->|"ERROR_REPORT"| BS
-    BS -->|"SESSION_UPDATE"| MR
-    BS -->|"SETTINGS_CHANGE"| MR
+    BS -->|"REFRESH_STATE"| MR
+    MR -.->|"read"| Repos
+    Repos -.->|"read"| ST
+    BS -->|"write"| ST
 ```
 
 ### Message Types
 
 | Message | Direction | Payload | Description |
 |---------|-----------|---------|-------------|
-| `GET_SESSION_STATE` | Content → Background | `{ domain: string }` | Request current session for domain |
-| `GET_SETTINGS` | Content → Background | `{}` | Request initial settings on load |
+| `REFRESH_STATE` | Background → Content | `{ reason: RefreshStateReason }` | Signal content script to read fresh state from storage |
 | `UPDATE_PILL_POSITION` | Content → Background | `{ position: PillPosition, source: PositionChangeSource }` | Report pill position change |
-| `SESSION_UPDATE` | Background → Content | `SessionStatePayload` | Push session state to content script |
-| `SETTINGS_CHANGE` | Background → Content | `{ pillPosition?, pillVisibility?, excludedDomains? }` | Push settings changes (cross-tab sync) |
 | `ERROR_REPORT` | Content → Background | `{ error, context, stackTrace? }` | Report content script errors |
+
+**Note:** `GET_SESSION_STATE` and `GET_SETTINGS` messages are only used during initial load fallback. Normal state access uses direct storage reads via repositories.
 
 ### Position Change Source
 
@@ -160,13 +168,12 @@ interface MessageResponse<T = unknown> {
   error?: string;
 }
 
-// Shared session state payload
-interface SessionStatePayload {
-  domain: string;
-  currentTime: number;  // elapsed milliseconds
-  isActive: boolean;
-  isPaused: boolean;
-  startTime: number;    // performance.now() value
+// Refresh state signal payload
+type RefreshStateReason = "tab_activated" | "navigation" | "settings_changed" | "service_ready";
+
+interface RefreshStateMessage extends ExtensionMessage {
+  type: "REFRESH_STATE";
+  payload: { reason: RefreshStateReason };
 }
 
 type PositionChangeSource = "user_drag" | "window_resize";
@@ -178,33 +185,27 @@ type PositionChangeSource = "user_drag" | "window_resize";
 
 ### StorageManager
 
+Pure generic CRUD abstraction. All domain-specific operations are in repositories.
+
 ```typescript
 class StorageManager {
   // Singleton
   static getInstance(storage?: StorageArea): StorageManager
   static resetInstance(): void
 
-  // Core CRUD
-  get<K extends keyof StorageSchema>(keys: K | K[]): Promise<Partial<Pick<StorageSchema, K>>>
-  set<K extends keyof StorageSchema>(items: Partial<Pick<StorageSchema, K>>): Promise<void>
-  remove(keys: keyof StorageSchema | (keyof StorageSchema)[]): Promise<void>
+  // Storage access
+  getStorage(): StorageArea
+
+  // Generic CRUD operations
+  get<T = unknown>(keys: string | string[]): Promise<Record<string, T>>
+  set(items: Record<string, unknown>): Promise<void>
+  remove(keys: string | string[]): Promise<void>
   clear(): Promise<void>
-  getAll(): Promise<StorageSchema>
-  initialize(): Promise<void>
-
-  // Domain operations
-  getDomainData(domain: string): Promise<DomainData>
-  updateDomainData(domain: string, updates: Partial<DomainData>): Promise<void>
-
-  // Session operations
-  getActiveSession(): Promise<ActiveSession | null>
-  setActiveSession(session: ActiveSession | null): Promise<void>
-
-  // Settings operations
-  getSettings(): Promise<ExtensionSettings>
-  updateSettings(updates: Partial<ExtensionSettings>): Promise<void>
+  getAll<T = unknown>(): Promise<Record<string, T>>
 }
 ```
+
+> **Note:** Domain-specific operations (getActiveTab, getSettings, getDay) are handled by repositories (TabRepository, SettingsRepository, HistoryRepository).
 
 ### TimeTracker
 
@@ -335,7 +336,11 @@ class SettingsRepository {
 ```typescript
 class BackgroundService {
   // Singleton
-  static getInstance(storageManager?: StorageManager, timeTracker?: TimeTracker): BackgroundService
+  static getInstance(
+    dataModelManager?: DataModelManager,
+    timeTracker?: TimeTracker,
+    settingsRepository?: SettingsRepository
+  ): BackgroundService
   static resetInstance(): void
 
   // Lifecycle
@@ -344,10 +349,7 @@ class BackgroundService {
   shutdown(): Promise<void>
 
   // Session access
-  getCurrentSession(): Promise<ActiveSession | null>
-
-  // Settings broadcast (called when position changes via user_drag)
-  broadcastSettingsChange(excludeTabId?: number): Promise<void>
+  getCurrentSession(): Promise<ActiveTab | null>
 
   // Event handlers (private)
   // handleTabActivated(activeInfo: { tabId, windowId })
@@ -362,14 +364,14 @@ class BackgroundService {
 
 | Message Type | Handler Action |
 |--------------|----------------|
-| `GET_SESSION_STATE` | Return current session if domain matches |
-| `GET_SETTINGS` | Return current extension settings |
-| `UPDATE_PILL_POSITION` | Save position; if `source === "user_drag"`, broadcast to other tabs |
+| `GET_SESSION_STATE` | Return current session if domain matches (fallback for initial load) |
+| `GET_SETTINGS` | Return current extension settings (fallback for initial load) |
+| `UPDATE_PILL_POSITION` | Save position; if `source === "user_drag"`, send `REFRESH_STATE` to other tabs |
 | `ERROR_REPORT` | Log error with context |
 
-**Broadcast Behavior:**
+**Signal Behavior:**
 
-When session updates are sent (tab activation, navigation, etc.), the background also pushes current settings via `SETTINGS_CHANGE` to ensure content scripts have fresh settings without needing to request them.
+When state changes occur (tab activation, navigation, etc.), the background sends `REFRESH_STATE` signals to relevant content scripts. Content scripts then read fresh data directly from storage via repositories, rather than receiving data in the message payload.
 
 ### MessageRouter
 
@@ -391,6 +393,8 @@ class MessageRouter implements MessageSender {
 ```
 
 ### ContentScriptManager
+
+Uses shared repositories for direct storage access. See [ADR-0002: Shared Storage Layer](adr/0002-shared-storage-layer.md).
 
 ```typescript
 class ContentScriptManager {
@@ -423,16 +427,19 @@ class ContentScriptManager {
 **Initialization Sequence:**
 
 1. Wait for `DOMContentLoaded`
-2. Initialize `MessageRouter` and register handlers for `SESSION_UPDATE`, `SETTINGS_CHANGE`
-3. Create and register `TimeDisplayPill` component
-4. Request initial session state with **exponential backoff retry** (max 5 attempts)
-5. Setup visibility change handler for tab reactivation
+2. Initialize `MessageRouter` and register handler for `REFRESH_STATE`
+3. Initialize repositories (SettingsRepository, TabRepository) for direct storage access
+4. Read initial settings from storage via repository
+5. Create and register `TimeDisplayPill` component with saved position
+6. Read initial session state from storage via repository
+7. Setup visibility change handler for state refresh
 
-**Resilience Features:**
+**Data Access Pattern:**
 
-- Exponential backoff retry (100ms × 2^attempt) for background connection issues
-- `AbortController` support for cancellation during retries
-- Visibility-based reconnection when tab becomes visible
+- Content scripts read state directly from `browser.storage.local` via shared repositories
+- Background sends `REFRESH_STATE` signals when state changes
+- On receiving `REFRESH_STATE`, content script reads fresh data from storage
+- No retry logic needed - direct storage access is always available
 
 ### TimeDisplayPill
 
