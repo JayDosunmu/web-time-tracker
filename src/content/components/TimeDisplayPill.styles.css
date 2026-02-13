@@ -372,3 +372,17 @@
     transition: none;
   }
 }
+
+/* ============================================
+   HIDDEN MODE STYLES
+   ============================================ */
+
+/* Hidden mode: hide other icons but preserve their space so eye button stays in place */
+.pill-wrapper.hidden .icons-container > *:not(:last-child) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pill-wrapper.hidden .pill-card {
+  display: none;
+}

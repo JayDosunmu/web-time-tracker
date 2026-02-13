@@ -47,6 +47,7 @@ function getDefaultSettings(): ExtensionSettings {
     pillPosition: { x: 9999, y: 20 },
     pillVisibility: true,
     pillShowFullInfo: false,
+    pillHidden: false,
     dataRetentionDays: 30,
     excludedDomains: [],
   };

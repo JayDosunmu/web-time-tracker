@@ -17,6 +17,7 @@ export const mockExtensionSettings: ExtensionSettings = {
   pillPosition: { x: 9999, y: 20 },
   pillVisibility: true,
   pillShowFullInfo: false,
+  pillHidden: false,
   dataRetentionDays: 30,
   excludedDomains: ["localhost", "127.0.0.1"],
 };

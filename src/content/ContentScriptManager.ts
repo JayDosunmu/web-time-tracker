@@ -179,10 +179,11 @@ export class ContentScriptManager {
       // Read settings directly from storage via repository
       const settings = await this.settingsRepository.getSettings();
 
-      // Create and register TimeDisplayPill with saved position and showFullInfo
+      // Create and register TimeDisplayPill with saved position, showFullInfo, and hidden state
       const timeDisplayPill = new TimeDisplayPill(
         settings.pillPosition,
         settings.pillShowFullInfo,
+        settings.pillHidden,
       );
 
       // Wire up callbacks for persistence
@@ -191,6 +192,9 @@ export class ContentScriptManager {
       );
       timeDisplayPill.setShowFullInfoChangeCallback(
         this.handleShowFullInfoChange.bind(this),
+      );
+      timeDisplayPill.setHiddenChangeCallback(
+        this.handleHiddenChange.bind(this),
       );
 
       this.registerComponent("timeDisplayPill", timeDisplayPill);
@@ -284,6 +288,7 @@ export class ContentScriptManager {
         pillPosition: settings.pillPosition,
         pillVisibility: settings.pillVisibility,
         pillShowFullInfo: settings.pillShowFullInfo,
+        pillHidden: settings.pillHidden,
       });
 
       console.log("State refreshed from storage");
@@ -355,6 +360,27 @@ export class ContentScriptManager {
       }
     } catch (error) {
       console.error("Error saving pill showFullInfo:", error);
+    }
+  }
+
+  /**
+   * Handle hidden changes from TimeDisplayPill toggle
+   */
+  private async handleHiddenChange(hidden: boolean): Promise<void> {
+    try {
+      const response = await this.messageRouter.sendMessage({
+        type: "UPDATE_PILL_HIDDEN",
+        payload: { hidden },
+      });
+
+      if (!response.success) {
+        console.error(
+          "Failed to save pill hidden:",
+          response.error || "No response from background",
+        );
+      }
+    } catch (error) {
+      console.error("Error saving pill hidden:", error);
     }
   }
 
