@@ -95,6 +95,7 @@ export const Pill: FunctionComponent<PillProps> = ({
   const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
   const [isVisibilityIconHovered, setIsVisibilityIconHovered] = useState(false);
   const [visibilityWasToggled, setVisibilityWasToggled] = useState(false);
+  const [isCardHovered, setIsCardHovered] = useState(false);
 
   // Derived: show full info when toggled ON or hovering (but not during drag)
   const showFullInfo = (isFullMode || isInfoIconHovered);
@@ -102,6 +103,7 @@ export const Pill: FunctionComponent<PillProps> = ({
   const hideCard = ((isHidden !== isVisibilityIconHovered) !== visibilityWasToggled);
 
   const pillRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
   const boundsRef = useRef({ maxX: 0, maxY: 0 });
   const prevPositionRef = useRef<PillPosition>(position);
@@ -179,6 +181,27 @@ export const Pill: FunctionComponent<PillProps> = ({
       return prev;
     });
   }, [position.x, position.y]);
+
+  // Card hover detection using document-level listener
+  // (needed because pointer-events: none on wrapper prevents local events)
+  useEffect(() => {
+    const handleMouseMove = (event: globalThis.MouseEvent): void => {
+      if (!cardRef.current) return;
+      const rect = cardRef.current.getBoundingClientRect();
+      const isOver = (
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom
+      );
+      setIsCardHovered(isOver);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
 
   // Drag handlers
   const handleMouseDown = (event: MouseEvent): void => {
@@ -323,12 +346,17 @@ export const Pill: FunctionComponent<PillProps> = ({
     isPaused ? 'paused' : '',
     isDragging ? 'dragging' : '',
     !showFullInfo ? 'minimal' : '',
+    isCardHovered ? 'hovered' : '',
   ].filter(Boolean).join(' ');
 
   const wrapperClass = ['pill-wrapper', hideCard ? 'hidden' : ''].filter(Boolean).join(' ');
 
   return (
-    <div ref={pillRef} class={wrapperClass} style={positionStyle}>
+    <div
+      ref={pillRef}
+      class={wrapperClass}
+      style={positionStyle}
+    >
       {/* Icons Container */}
       <div class="icons-container">
         {/* Drag Handle Icon */}
@@ -374,7 +402,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       </div>
 
       {/* Pill Card */}
-      <div class={pillClass}>
+      <div ref={cardRef} class={pillClass}>
         {/* Row 1: Domain + visits */}
         <div class="pill-header">
           <span class="domain">{domain}</span>
