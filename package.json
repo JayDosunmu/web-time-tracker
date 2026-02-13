@@ -82,7 +82,8 @@
       "^react-dom$": "<rootDir>/node_modules/preact/compat/dist/compat.js",
       "^react-dom/test-utils$": "<rootDir>/node_modules/preact/test-utils/dist/testUtils.js",
       "^react/jsx-runtime$": "<rootDir>/node_modules/preact/jsx-runtime/dist/jsxRuntime.js",
-      "\\.css\\?inline$": "<rootDir>/tests/css-inline-mock.js"
+      "\\.css\\?inline$": "<rootDir>/tests/css-inline-mock.js",
+      "\\.css$": "<rootDir>/tests/css-inline-mock.js"
     },
     "transform": {
       "^.+\\.tsx?$": [

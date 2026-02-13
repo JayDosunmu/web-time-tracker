@@ -77,6 +77,7 @@ describe("ContentScriptManager", () => {
       onSettingsChange: jest.fn(),
       setPositionChangeCallback: jest.fn(),
       setShowFullInfoChangeCallback: jest.fn(),
+      setHiddenChangeCallback: jest.fn(),
       destroy: jest.fn(),
     } as any;
 
@@ -546,6 +547,100 @@ describe("ContentScriptManager", () => {
       await contentManager.initialize();
 
       expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe("Hidden State Persistence", () => {
+    it("should pass initial pillHidden to TimeDisplayPill constructor", async () => {
+      const settingsWithHidden = {
+        ...mockSettings,
+        pillHidden: true,
+      };
+      mockSettingsRepository.getSettings.mockResolvedValue(settingsWithHidden);
+
+      await contentManager.initialize();
+
+      // Verify TimeDisplayPill was constructed with pillHidden from storage
+      expect(TimeDisplayPill).toHaveBeenCalledWith(
+        expect.any(Object), // position
+        expect.any(Boolean), // showFullInfo
+        true // pillHidden
+      );
+    });
+
+    it("should wire up setHiddenChangeCallback on pill", async () => {
+      await contentManager.initialize();
+
+      expect(mockTimeDisplayPill.setHiddenChangeCallback).toHaveBeenCalledWith(
+        expect.any(Function)
+      );
+    });
+
+    it("should send UPDATE_PILL_HIDDEN message when hidden changes", async () => {
+      mockMessageRouter.sendMessage.mockResolvedValue({ success: true });
+      await contentManager.initialize();
+
+      // Get the callback that was registered
+      const hiddenChangeCallback =
+        mockTimeDisplayPill.setHiddenChangeCallback.mock.calls[0][0];
+
+      // Simulate hidden change
+      await hiddenChangeCallback(true);
+
+      expect(mockMessageRouter.sendMessage).toHaveBeenCalledWith({
+        type: "UPDATE_PILL_HIDDEN",
+        payload: { hidden: true },
+      });
+    });
+
+    it("should handle UPDATE_PILL_HIDDEN message failure gracefully", async () => {
+      mockMessageRouter.sendMessage.mockResolvedValue({
+        success: false,
+        error: "Storage error",
+      });
+      await contentManager.initialize();
+
+      // Get the callback that was registered
+      const hiddenChangeCallback =
+        mockTimeDisplayPill.setHiddenChangeCallback.mock.calls[0][0];
+
+      // Should not throw despite error response
+      expect(() => hiddenChangeCallback(true)).not.toThrow();
+    });
+
+    it("should broadcast pillHidden in onSettingsChange on REFRESH_STATE", async () => {
+      const settingsWithHidden = {
+        ...mockSettings,
+        pillHidden: true,
+      };
+      mockSettingsRepository.getSettings.mockResolvedValue(settingsWithHidden);
+      await contentManager.initialize();
+
+      // Clear previous calls from initialization
+      mockTimeDisplayPill.onSettingsChange.mockClear();
+
+      // Trigger REFRESH_STATE handler
+      const registerCalls = mockMessageRouter.registerHandler.mock.calls;
+      const refreshCall = registerCalls.find(
+        (call) => call[0] === "REFRESH_STATE"
+      );
+      const rawHandler = refreshCall![1];
+      const mockSender = {} as browser.runtime.MessageSender;
+      const mockSendResponse = jest.fn();
+
+      const refreshMessage: RefreshStateMessage = {
+        type: "REFRESH_STATE",
+        payload: { reason: "settings_changed" },
+        id: "test-id",
+        timestamp: Date.now(),
+      };
+
+      await rawHandler(refreshMessage, mockSender, mockSendResponse);
+
+      // Verify pillHidden is included in broadcast
+      expect(mockTimeDisplayPill.onSettingsChange).toHaveBeenCalledWith(
+        expect.objectContaining({ pillHidden: true })
+      );
     });
   });
 });

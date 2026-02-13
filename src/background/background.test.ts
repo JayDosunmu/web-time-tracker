@@ -27,6 +27,8 @@ describe("BackgroundService", () => {
   let windowFocusHandler: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let webNavHandler: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let messageHandler: any;
 
   const mockActiveTab: ActiveTab = {
     domain: "example.com",
@@ -101,6 +103,11 @@ describe("BackgroundService", () => {
       browser.webNavigation.onCompleted.addListener as unknown as jest.Mock
     ).mockImplementation((handler) => {
       webNavHandler = handler;
+    });
+    (
+      browser.runtime.onMessage.addListener as unknown as jest.Mock
+    ).mockImplementation((handler) => {
+      messageHandler = handler;
     });
 
     // Reset and create BackgroundService with mocks
@@ -501,6 +508,85 @@ describe("BackgroundService", () => {
 
       // Should not attempt to start session with invalid URL
       expect(mockTimeTracker.startSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Pill Hidden Setting", () => {
+    beforeEach(async () => {
+      await backgroundService.initialize();
+    });
+
+    it("should handle UPDATE_PILL_HIDDEN message", async () => {
+      const message = {
+        type: "UPDATE_PILL_HIDDEN",
+        payload: { hidden: true },
+        id: "test-id",
+        timestamp: Date.now(),
+      };
+      const sendResponse = jest.fn();
+
+      mockSettingsRepository.updateSettings.mockResolvedValue();
+
+      await messageHandler(message, {}, sendResponse);
+
+      expect(mockSettingsRepository.updateSettings).toHaveBeenCalledWith({
+        pillHidden: true,
+      });
+    });
+
+    it("should persist pillHidden to settings repository", async () => {
+      const message = {
+        type: "UPDATE_PILL_HIDDEN",
+        payload: { hidden: false },
+        id: "test-id",
+        timestamp: Date.now(),
+      };
+      const sendResponse = jest.fn();
+
+      mockSettingsRepository.updateSettings.mockResolvedValue();
+
+      await messageHandler(message, {}, sendResponse);
+
+      expect(mockSettingsRepository.updateSettings).toHaveBeenCalledWith({
+        pillHidden: false,
+      });
+    });
+
+    it("should return success response on valid update", async () => {
+      const message = {
+        type: "UPDATE_PILL_HIDDEN",
+        payload: { hidden: true },
+        id: "test-id",
+        timestamp: Date.now(),
+      };
+      const sendResponse = jest.fn();
+
+      mockSettingsRepository.updateSettings.mockResolvedValue();
+
+      await messageHandler(message, {}, sendResponse);
+
+      expect(sendResponse).toHaveBeenCalledWith({ success: true });
+    });
+
+    it("should return error response on storage failure", async () => {
+      const message = {
+        type: "UPDATE_PILL_HIDDEN",
+        payload: { hidden: true },
+        id: "test-id",
+        timestamp: Date.now(),
+      };
+      const sendResponse = jest.fn();
+
+      mockSettingsRepository.updateSettings.mockRejectedValue(
+        new Error("Storage error")
+      );
+
+      await messageHandler(message, {}, sendResponse);
+
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: false,
+        error: "Storage error",
+      });
     });
   });
 });
