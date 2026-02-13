@@ -94,10 +94,12 @@ export const Pill: FunctionComponent<PillProps> = ({
   const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
   const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
   const [isVisibilityIconHovered, setIsVisibilityIconHovered] = useState(false);
+  const [visibilityWasToggled, setVisibilityWasToggled] = useState(false);
 
   // Derived: show full info when toggled ON or hovering (but not during drag)
   const showFullInfo = (isFullMode || isInfoIconHovered);
-  const hideCard = (isHidden !== isVisibilityIconHovered)
+  // Derived: hide card when toggled ON or hovering and toggled OFF. If hide was toggled after hovering, use visibilityWasToggled to invert this functionality. visibilityWasToggled will reset to false onExit from the icon.
+  const hideCard = ((isHidden !== isVisibilityIconHovered) !== visibilityWasToggled);
 
   const pillRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
@@ -334,9 +336,18 @@ export const Pill: FunctionComponent<PillProps> = ({
         {/* Visibility Toggle Button */}
         <ToggleIconButton
           isActive={isHidden}
-          onToggle={() => onHiddenChange(!isHidden)}
+          onToggle={() => {
+            setVisibilityWasToggled(true);
+            onHiddenChange(!isHidden)
+          }}
           enableHoverPreview={!isHidden}
-          onHoverChange={setIsVisibilityIconHovered}
+          onHoverChange={(isHovered: boolean) => {
+            setIsVisibilityIconHovered(isHovered);
+            // Reset the flag that visibility was toggled when mouse leaves the visibility icon.
+            if (!isHovered) {
+              setVisibilityWasToggled(false);
+            }
+          }}
           activeIcon={RiEyeFill}
           inactiveIcon={RiEyeLine}
           activeLabel="Show timer pill"
