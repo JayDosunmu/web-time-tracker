@@ -6,11 +6,7 @@
  */
 
 import type { History, Day, HourData } from "../../../types";
-import {
-  getDateKey,
-  getMidnightTimestamp,
-  DAY_STORAGE_PREFIX,
-} from "../dateUtils";
+import { getDateKey, getMidnightTimestamp, DAY_STORAGE_PREFIX } from "../utils";
 
 type StorageArea = browser.storage.StorageArea;
 
@@ -32,7 +28,7 @@ export class HistoryRepository {
     if (!HistoryRepository.instance) {
       if (!storage) {
         throw new Error(
-          "HistoryRepository must be initialized with storage parameter on first call"
+          "HistoryRepository must be initialized with storage parameter on first call",
         );
       }
       HistoryRepository.instance = new HistoryRepository(storage);
@@ -50,7 +46,9 @@ export class HistoryRepository {
   async getHistory(): Promise<History> {
     try {
       const result = await this.storage.get(STORAGE_KEYS.HISTORY);
-      return (result[STORAGE_KEYS.HISTORY] as History) || this.createEmptyHistory();
+      return (
+        (result[STORAGE_KEYS.HISTORY] as History) || this.createEmptyHistory()
+      );
     } catch (error) {
       console.error("HistoryRepository.getHistory error:", error);
       return this.createEmptyHistory();
@@ -148,7 +146,7 @@ export class HistoryRepository {
    */
   async getDaysInRange(
     startDate: string,
-    endDate: string
+    endDate: string,
   ): Promise<Record<string, Day>> {
     try {
       const history = await this.getHistory();
@@ -183,7 +181,7 @@ export class HistoryRepository {
 
       // Sort days by timestamp (oldest first)
       const sortedDayKeys = Object.keys(history.days).sort(
-        (a, b) => history.days[a].timestamp - history.days[b].timestamp
+        (a, b) => history.days[a].timestamp - history.days[b].timestamp,
       );
 
       for (const dateKey of sortedDayKeys) {

@@ -12,8 +12,12 @@ import type {
 } from "../../types";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
-import { SettingsRepository, TabRepository, HistoryRepository } from "../shared/repositories";
-import { getDateKey } from "../shared/dateUtils";
+import {
+  SettingsRepository,
+  TabRepository,
+  HistoryRepository,
+} from "../shared/repositories";
+import { getDateKey } from "../shared/utils";
 
 export class ContentScriptManager {
   private static instance: ContentScriptManager | null = null;
@@ -252,13 +256,14 @@ export class ContentScriptManager {
         const todayKey = getDateKey(Date.now());
         const todayData = await this.historyRepository.getDay(todayKey);
 
-        const visitCount = todayData?.domains[this.currentDomain]?.visitCount ?? 0;
+        const visitCount =
+          todayData?.domains[this.currentDomain]?.visitCount ?? 0;
         const totalTimeToday = todayData?.totalTime ?? 0;
 
         sessionState = {
           domain: activeTab.domain,
-          currentTime: activeTab.totalTime,
-          totalTimeToday,
+          baseCurrentTime: activeTab.totalTime,
+          baseTotalTimeToday: totalTimeToday,
           visitCount,
           isActive: activeTab.active,
           isPaused: !activeTab.active,

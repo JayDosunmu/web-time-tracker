@@ -355,8 +355,8 @@ describe("ContentScriptManager", () => {
       // Should update pill with session state
       expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith({
         domain: "example.com",
-        currentTime: 5000,
-        totalTimeToday: 15000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 15000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
@@ -524,8 +524,8 @@ describe("ContentScriptManager", () => {
       // Should build and pass session state to pill
       expect(mockTimeDisplayPill.onSessionUpdate).toHaveBeenCalledWith({
         domain: "example.com",
-        currentTime: 5000,
-        totalTimeToday: 15000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 15000,
         visitCount: 3,
         isActive: true,
         isPaused: false,

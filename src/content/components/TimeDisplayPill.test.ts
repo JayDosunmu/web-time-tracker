@@ -43,8 +43,8 @@ describe('TimeDisplayPill', () => {
 
       const sessionState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
@@ -64,8 +64,8 @@ describe('TimeDisplayPill', () => {
       // First activate a session to start animation
       const activeState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
@@ -77,8 +77,8 @@ describe('TimeDisplayPill', () => {
       // Then pause it
       const pausedState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: false,
         isPaused: true,
@@ -96,8 +96,8 @@ describe('TimeDisplayPill', () => {
 
       const sessionState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
@@ -123,8 +123,8 @@ describe('TimeDisplayPill', () => {
       // First activate
       const activeState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
@@ -136,8 +136,8 @@ describe('TimeDisplayPill', () => {
       // Then pause
       const pausedState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: false,
         isPaused: true,
@@ -157,7 +157,7 @@ describe('TimeDisplayPill', () => {
 
       const malformedState = {
         domain: 'example.com',
-        currentTime: 'invalid',
+        baseCurrentTime: 'invalid',
         isActive: true
       } as any;
 
@@ -194,8 +194,8 @@ describe('TimeDisplayPill', () => {
 
       const sessionState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
@@ -228,8 +228,8 @@ describe('TimeDisplayPill', () => {
 
       const sessionState: SessionState = {
         domain: 'example.com',
-        currentTime: 5000,
-        totalTimeToday: 10000,
+        baseCurrentTime: 5000,
+        baseTotalTimeToday: 10000,
         visitCount: 3,
         isActive: true,
         isPaused: false,
