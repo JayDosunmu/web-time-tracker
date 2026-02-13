@@ -69,6 +69,18 @@ graph TB
 
 ## Component Descriptions
 
+### WXT Entrypoints
+
+WXT auto-discovers entrypoints from the `src/entrypoints/` directory:
+
+| Entrypoint | Path | Purpose |
+|------------|------|---------|
+| **background** | [src/entrypoints/background/index.ts](../src/entrypoints/background/index.ts) | Service worker bootstrap, MV3 event registration, alarm handling |
+| **timer-pill.content** | [src/entrypoints/timer-pill.content/index.ts](../src/entrypoints/timer-pill.content/index.ts) | Content script injection (all HTTP/HTTPS URLs) |
+| **popup** | [src/entrypoints/popup/](../src/entrypoints/popup/) | Browser action popup UI |
+
+These entrypoints wrap the core logic in `src/background/`, `src/content/`, and `src/shared/`.
+
 ### Background Service Layer
 
 | Component | File | Purpose |
@@ -100,7 +112,7 @@ graph TB
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| **App** | [src/popup/App.tsx](../src/popup/App.tsx) | Dashboard showing current session info and today's total time, polls storage directly for live updates |
+| **App** | [src/entrypoints/popup/App.tsx](../src/entrypoints/popup/App.tsx) | Dashboard showing current session info and today's total time, polls storage directly for live updates |
 
 ---
 

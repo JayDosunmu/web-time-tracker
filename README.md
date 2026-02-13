@@ -1,6 +1,6 @@
 # Web Time Tracker
 
-A Firefox extension that tracks time spent on different websites. It displays a floating timer pill on every page showing your active session duration and provides aggregated per-domain statistics through a popup interface. All data stays local to your browser.
+A browser extension for Chrome and Firefox that tracks time spent on different websites. It displays a floating timer pill on every page showing your active session duration and provides aggregated per-domain statistics through a popup interface. All data stays local to your browser.
 
 ## Features
 
@@ -86,6 +86,7 @@ For deeper architectural understanding, see the docs folder:
 |-------------|---------|
 | Node.js     | >= 18   |
 | npm         | (bundled with Node) |
+| Chrome/Edge/Brave | >= 88 |
 | Firefox     | >= 109  |
 
 ## Local Development Setup
@@ -98,33 +99,47 @@ cd web-time-tracker
 npm install
 ```
 
-### 2. Run in Firefox with auto-reload
+### 2. Development mode
 
 ```bash
+# Chrome (default)
 npm run dev
+
+# Firefox
+npm run dev:firefox
 ```
 
-This starts Vite in watch mode and launches Firefox with the extension loaded via `web-ext`. Code changes trigger an automatic rebuild and extension reload.
+This starts WXT in watch mode with hot module replacement. Changes trigger automatic rebuild and extension reload.
 
-### 3. Or load manually
+### 3. Manual loading (optional)
 
 ```bash
-npm run build:dev
+# Build for Chrome
+npm run build
+
+# Build for Firefox
+npm run build:firefox
 ```
 
-Then in Firefox:
+**Chrome/Edge/Brave:**
+1. Navigate to `chrome://extensions`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select `.output/chrome-mv3` folder
 
+**Firefox:**
 1. Navigate to `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on...**
-3. Select `dist/manifest.json`
+3. Select `.output/firefox-mv2/manifest.json`
 
 ## Technology Stack
 
 - **TypeScript** -- strict mode, explicit return types
-- **Vite** + **vite-plugin-web-extension** -- unified build with automatic entry point discovery from `manifest.json`
+- **WXT** -- Web eXtension Toolkit for cross-browser builds
+- **Preact** -- lightweight UI components
+- **Vite** -- fast bundler with HMR
 - **Jest** -- unit testing with `ts-jest` and `jsdom` environment
 - **ESLint** -- code quality enforcement
-- **web-ext** -- Firefox extension development tooling
 
 ## License
 
