@@ -5,7 +5,7 @@
 
 import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { RiInformation2Line, RiInformation2Fill, RiEyeLine, RiEyeFill } from 'react-icons/ri';
+import { RiInformation2Line, RiInformation2Fill, RiEyeLine, RiEyeFill, RiDragMove2Line } from 'react-icons/ri';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
 import { normalizeToReferencePhase } from '../../shared/utils';
@@ -254,6 +254,14 @@ export const Pill: FunctionComponent<PillProps> = ({
       <div ref={pillRef} class={connectingWrapperClass} style={positionStyle}>
         {/* Icons Container */}
         <div class="icons-container">
+          {/* Drag Handle Icon */}
+          <button
+            class="drag-icon"
+            onMouseDown={handleMouseDown}
+            aria-label="Drag to reposition"
+          >
+            <RiDragMove2Line size={24} />
+          </button>
           {/* Info Icon Button - disabled during connecting */}
           <ToggleIconButton
             isActive={false}
@@ -263,6 +271,7 @@ export const Pill: FunctionComponent<PillProps> = ({
             activeLabel="Show less information"
             inactiveLabel="Show more information"
             disabled={true}
+            className="hideable"
           />
           {/* Visibility Toggle Button */}
           <ToggleIconButton
@@ -275,7 +284,7 @@ export const Pill: FunctionComponent<PillProps> = ({
           />
         </div>
 
-        <div class={connectingPillClass} onMouseDown={handleMouseDown}>
+        <div class={connectingPillClass}>
           <div class="pill-header">
             <span class="domain">--</span>
           </div>
@@ -322,6 +331,14 @@ export const Pill: FunctionComponent<PillProps> = ({
     <div ref={pillRef} class={wrapperClass} style={positionStyle}>
       {/* Icons Container */}
       <div class="icons-container">
+        {/* Drag Handle Icon */}
+        <button
+          class="drag-icon"
+          onMouseDown={handleMouseDown}
+          aria-label="Drag to reposition"
+        >
+          <RiDragMove2Line size={24} />
+        </button>
         {/* Info Icon Button */}
         <ToggleIconButton
           isActive={isFullMode}
@@ -332,6 +349,7 @@ export const Pill: FunctionComponent<PillProps> = ({
           inactiveLabel="Show more information"
           enableHoverPreview={true}
           onHoverChange={setIsInfoIconHovered}
+          className="hideable"
         />
         {/* Visibility Toggle Button */}
         <ToggleIconButton
@@ -356,7 +374,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       </div>
 
       {/* Pill Card */}
-      <div class={pillClass} onMouseDown={handleMouseDown}>
+      <div class={pillClass}>
         {/* Row 1: Domain + visits */}
         <div class="pill-header">
           <span class="domain">{domain}</span>

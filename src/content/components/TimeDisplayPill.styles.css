@@ -15,12 +15,60 @@
 
 /* Icons container - holds all icon buttons */
 .icons-container {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 26px 26px 26px;  /* Fixed 3 columns for drag, info, visibility */
   align-items: center;
   gap: 6px;
   height: 44px;
   flex-shrink: 0;
+}
+
+/* Drag handle icon button - styled consistently with ToggleIconButton */
+.drag-icon {
+  /* Reset button styles */
+  border: none;
+  padding: 0;
+  background: transparent;
+
+  /* Button sizing - same as ToggleIconButton */
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+
+  /* Layout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  /* Interaction */
+  cursor: grab;
+
+  /* Icon color */
+  color: white;
+}
+
+.drag-icon:active {
+  cursor: grabbing;
+}
+
+.drag-icon:focus {
+  outline: none;
+}
+
+.drag-icon:focus-visible {
+  outline: 2px solid #1b72e2;
+  outline-offset: 2px;
+}
+
+/* SVG drop shadow for visibility on any background */
+.drag-icon svg {
+  filter:
+    drop-shadow(0 0 3px rgba(0, 0, 0, 0.08))
+    drop-shadow(1px 0px rgba(0, 0, 0, 0.3))
+    drop-shadow(0px -1px rgba(0, 0, 0, 0.3))
+    drop-shadow(-1px 0px rgba(0, 0, 0, 0.3))
+    drop-shadow(0px 1px rgba(0, 0, 0, 0.3));
 }
 
 /* ============================================
@@ -68,7 +116,6 @@
 
   /* Interaction */
   user-select: none;
-  cursor: grab;
 
   /* Base font (labels) */
   font-family: var(--font-system);
@@ -337,7 +384,6 @@
 
 /* State: Dragging */
 .pill-card.dragging {
-  cursor: grabbing;
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.15),
     0 8px 24px rgba(0, 0, 0, 0.1);
@@ -377,10 +423,14 @@
    HIDDEN MODE STYLES
    ============================================ */
 
-/* Hidden mode: hide other icons but preserve their space so eye button stays in place */
-.pill-wrapper.hidden .icons-container > *:not(:last-child) {
-  visibility: hidden;
-  pointer-events: none;
+/* Hidden mode: hide hideable icons (info) */
+.pill-wrapper.hidden .hideable {
+  display: none;
+}
+
+/* Hidden mode: move drag icon to column 2 (next to visibility in column 3) */
+.pill-wrapper.hidden .drag-icon {
+  grid-column: 2;
 }
 
 .pill-wrapper.hidden .pill-card {
