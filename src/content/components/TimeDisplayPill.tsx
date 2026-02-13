@@ -5,7 +5,7 @@
 
 import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { RiInformation2Line, RiInformation2Fill } from 'react-icons/ri';
+import { RiInformation2Line, RiInformation2Fill, RiEyeLine, RiEyeFill } from 'react-icons/ri';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
 import { normalizeToReferencePhase } from '../../shared/utils';
@@ -73,8 +73,10 @@ interface PillProps {
   visible: boolean;
   isConnecting: boolean;
   showFullInfo: boolean;
+  isHidden: boolean;
   onPositionChange: (position: PillPosition, source: PositionChangeSource) => void;
   onShowFullInfoChange: (showFullInfo: boolean) => void;
+  onHiddenChange: (hidden: boolean) => void;
 }
 
 export const Pill: FunctionComponent<PillProps> = ({
@@ -83,15 +85,19 @@ export const Pill: FunctionComponent<PillProps> = ({
   visible,
   isConnecting,
   showFullInfo: isFullMode,
+  isHidden,
   onPositionChange,
   onShowFullInfoChange,
+  onHiddenChange,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
   const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
+  const [isVisibilityIconHovered, setIsVisibilityIconHovered] = useState(false);
 
   // Derived: show full info when toggled ON or hovering (but not during drag)
-  const showFullInfo = (isFullMode || isInfoIconHovered) && !isDragging;
+  const showFullInfo = (isFullMode || isInfoIconHovered);
+  const hideCard = (isHidden !== isVisibilityIconHovered)
 
   const pillRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
@@ -241,8 +247,9 @@ export const Pill: FunctionComponent<PillProps> = ({
   // Show connecting state while waiting for background service
   if (isConnecting && !sessionState) {
     const connectingPillClass = ['pill-card', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
+    const connectingWrapperClass = ['pill-wrapper', isHidden ? 'hidden' : ''].filter(Boolean).join(' ');
     return (
-      <div ref={pillRef} class="pill-wrapper" style={positionStyle}>
+      <div ref={pillRef} class={connectingWrapperClass} style={positionStyle}>
         {/* Icons Container */}
         <div class="icons-container">
           {/* Info Icon Button - disabled during connecting */}
@@ -254,6 +261,15 @@ export const Pill: FunctionComponent<PillProps> = ({
             activeLabel="Show less information"
             inactiveLabel="Show more information"
             disabled={true}
+          />
+          {/* Visibility Toggle Button */}
+          <ToggleIconButton
+            isActive={isHidden}
+            onToggle={() => onHiddenChange(!isHidden)}
+            activeIcon={RiEyeFill}
+            inactiveIcon={RiEyeLine}
+            activeLabel="Show timer pill"
+            inactiveLabel="Hide timer pill"
           />
         </div>
 
@@ -298,8 +314,10 @@ export const Pill: FunctionComponent<PillProps> = ({
     !showFullInfo ? 'minimal' : '',
   ].filter(Boolean).join(' ');
 
+  const wrapperClass = ['pill-wrapper', hideCard ? 'hidden' : ''].filter(Boolean).join(' ');
+
   return (
-    <div ref={pillRef} class="pill-wrapper" style={positionStyle}>
+    <div ref={pillRef} class={wrapperClass} style={positionStyle}>
       {/* Icons Container */}
       <div class="icons-container">
         {/* Info Icon Button */}
@@ -312,6 +330,17 @@ export const Pill: FunctionComponent<PillProps> = ({
           inactiveLabel="Show more information"
           enableHoverPreview={true}
           onHoverChange={setIsInfoIconHovered}
+        />
+        {/* Visibility Toggle Button */}
+        <ToggleIconButton
+          isActive={isHidden}
+          onToggle={() => onHiddenChange(!isHidden)}
+          enableHoverPreview={!isHidden}
+          onHoverChange={setIsVisibilityIconHovered}
+          activeIcon={RiEyeFill}
+          inactiveIcon={RiEyeLine}
+          activeLabel="Show timer pill"
+          inactiveLabel="Hide timer pill"
         />
       </div>
 
@@ -360,12 +389,14 @@ export class TimeDisplayPill {
     visible: boolean;
     isConnecting: boolean;
     showFullInfo: boolean;
+    hidden: boolean;
   };
   private onPositionChangeCallback: ((position: PillPosition, source: PositionChangeSource) => void) | null = null;
   private onShowFullInfoChangeCallback: ((showFullInfo: boolean) => void) | null = null;
+  private onHiddenChangeCallback: ((hidden: boolean) => void) | null = null;
   private animationFrameId: number | null = null;
 
-  constructor(initialPosition?: PillPosition, initialShowFullInfo?: boolean) {
+  constructor(initialPosition?: PillPosition, initialShowFullInfo?: boolean, initialHidden?: boolean) {
     this.state = {
       sessionState: null,
       // Use provided position or default to top-right (will be clamped to actual viewport)
@@ -373,6 +404,7 @@ export class TimeDisplayPill {
       visible: true,
       isConnecting: true,
       showFullInfo: initialShowFullInfo ?? false,
+      hidden: initialHidden ?? false,
     };
     this.mount();
   }
@@ -389,6 +421,13 @@ export class TimeDisplayPill {
    */
   public setShowFullInfoChangeCallback(callback: (showFullInfo: boolean) => void): void {
     this.onShowFullInfoChangeCallback = callback;
+  }
+
+  /**
+   * Set callback for hidden changes (for persistence)
+   */
+  public setHiddenChangeCallback(callback: (hidden: boolean) => void): void {
+    this.onHiddenChangeCallback = callback;
   }
 
   /**
@@ -415,6 +454,9 @@ export class TimeDisplayPill {
     }
     if (typeof settings.pillShowFullInfo === 'boolean') {
       this.state.showFullInfo = settings.pillShowFullInfo;
+    }
+    if (typeof settings.pillHidden === 'boolean') {
+      this.state.hidden = settings.pillHidden;
     }
     this.updateAnimation(wasAnimating);
     this.renderComponent();
@@ -498,6 +540,14 @@ export class TimeDisplayPill {
     }
   };
 
+  private handleHiddenChange = (hidden: boolean): void => {
+    this.state.hidden = hidden;
+    this.renderComponent();
+    if (this.onHiddenChangeCallback) {
+      this.onHiddenChangeCallback(hidden);
+    }
+  };
+
   private mount(): void {
     // Remove any existing pill (handles extension reload, HMR, re-injection)
     const existing = document.getElementById('web-time-tracker-pill');
@@ -533,8 +583,10 @@ export class TimeDisplayPill {
         visible={this.state.visible}
         isConnecting={this.state.isConnecting}
         showFullInfo={this.state.showFullInfo}
+        isHidden={this.state.hidden}
         onPositionChange={this.handlePositionChange}
         onShowFullInfoChange={this.handleShowFullInfoChange}
+        onHiddenChange={this.handleHiddenChange}
       />,
       this.container,
     );

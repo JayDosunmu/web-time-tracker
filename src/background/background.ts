@@ -14,6 +14,7 @@ import type {
   GetSettingsMessage,
   UpdatePillPositionMessage,
   UpdatePillShowFullInfoMessage,
+  UpdatePillHiddenMessage,
 } from "../../types";
 import { DataModelManager } from "./services/DataModelManager";
 import { TimeTracker } from "./services/TimeTracker";
@@ -172,6 +173,13 @@ export class BackgroundService {
         case "UPDATE_PILL_SHOW_FULL_INFO":
           await this.handleUpdatePillShowFullInfo(
             message as UpdatePillShowFullInfoMessage,
+            sendResponse,
+          );
+          break;
+
+        case "UPDATE_PILL_HIDDEN":
+          await this.handleUpdatePillHidden(
+            message as UpdatePillHiddenMessage,
             sendResponse,
           );
           break;
@@ -338,6 +346,31 @@ export class BackgroundService {
           error instanceof Error
             ? error.message
             : "Failed to update pill show full info setting",
+      });
+    }
+  }
+
+  private async handleUpdatePillHidden(
+    message: UpdatePillHiddenMessage,
+    sendResponse: (response: MessageResponse) => void,
+  ): Promise<void> {
+    try {
+      await this.settingsRepository.updateSettings({
+        pillHidden: message.payload.hidden,
+      });
+
+      sendResponse({ success: true });
+    } catch (error) {
+      console.error(
+        "BackgroundService.handleUpdatePillHidden error:",
+        error,
+      );
+      sendResponse({
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update pill hidden setting",
       });
     }
   }

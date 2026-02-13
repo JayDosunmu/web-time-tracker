@@ -30,6 +30,7 @@ describe("ContentScriptManager", () => {
     pillPosition: { x: 100, y: 100 },
     pillVisibility: true,
     pillShowFullInfo: false,
+    pillHidden: false,
     dataRetentionDays: 30,
     excludedDomains: [],
   };
@@ -473,6 +474,7 @@ describe("ContentScriptManager", () => {
         pillPosition: { x: 250, y: 100 },
         pillVisibility: false,
         pillShowFullInfo: false,
+        pillHidden: false,
         dataRetentionDays: 30,
         excludedDomains: [],
       };
@@ -501,6 +503,7 @@ describe("ContentScriptManager", () => {
         pillPosition: { x: 300, y: 150 },
         pillVisibility: true,
         pillShowFullInfo: false,
+        pillHidden: false,
         dataRetentionDays: 30,
         excludedDomains: [],
       };
@@ -509,8 +512,8 @@ describe("ContentScriptManager", () => {
 
       await contentManager.initialize();
 
-      // Verify TimeDisplayPill was constructed with the position and showFullInfo from storage
-      expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 }, false);
+      // Verify TimeDisplayPill was constructed with position, showFullInfo, and hidden from storage
+      expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 }, false, false);
     });
   });
 

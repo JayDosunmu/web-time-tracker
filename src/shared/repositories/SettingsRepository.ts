@@ -85,6 +85,7 @@ export class SettingsRepository {
       pillPosition: { x: 9999, y: 20 },
       pillVisibility: true,
       pillShowFullInfo: false, // Start in minimal mode
+      pillHidden: false, // Show all elements by default
       dataRetentionDays: 30,
       excludedDomains: [],
     };

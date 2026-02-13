@@ -40,6 +40,7 @@ describe("BackgroundService", () => {
     pillPosition: { x: 100, y: 100 },
     pillVisibility: true,
     pillShowFullInfo: false,
+    pillHidden: false,
     dataRetentionDays: 30,
     excludedDomains: [],
   };

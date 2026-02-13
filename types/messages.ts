@@ -95,6 +95,14 @@ export interface UpdatePillShowFullInfoMessage extends ExtensionMessage {
   };
 }
 
+// Update pill hidden setting
+export interface UpdatePillHiddenMessage extends ExtensionMessage {
+  type: "UPDATE_PILL_HIDDEN";
+  payload: {
+    hidden: boolean;
+  };
+}
+
 // Error report from content script
 export interface ErrorReportMessage extends ExtensionMessage {
   type: "ERROR_REPORT";
@@ -113,4 +121,5 @@ export type ExtensionMessageUnion =
   | GetSettingsMessage
   | UpdatePillPositionMessage
   | UpdatePillShowFullInfoMessage
+  | UpdatePillHiddenMessage
   | ErrorReportMessage;
