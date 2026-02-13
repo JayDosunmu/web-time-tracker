@@ -8,27 +8,41 @@
 
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: 10px;
   position: fixed;
   z-index: 2147483647;
+}
+
+/* Icons container - holds all icon buttons */
+.icons-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  flex-shrink: 0;
 }
 
 /* Info button */
 .info-button {
   border: none;
-  background: none;
-  padding: 4px;
+  padding: 0;
   cursor: pointer;
-  color: var(--color-muted);
-  margin-top: 8px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-}
 
-.info-button:hover {
-  color: var(--color-primary);
+  /* Circular button sizing - slightly larger than icon for padding */
+  width: 26px;
+  height: 26px;
+
+  /* Remove default button background */
+  background: transparent;
+  border-radius: 50%;
+
+  /* White icon */
+  color: white;
 }
 
 .info-button:focus {
@@ -38,14 +52,13 @@
 .info-button:focus-visible {
   outline: 2px solid var(--color-accent-blue);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* Icon container for crossfade */
 .icon-container {
   position: relative;
-  width: 14px;
-  height: 14px;
+  width: 24px;
+  height: 24px;
 }
 
 .info-icon {
@@ -54,6 +67,14 @@
   left: 0;
   display: flex;
   transition: opacity var(--transition-duration) var(--transition-timing);
+}
+
+.info-icon svg {
+  --svg-border-color: rgba(0, 0, 0, 0.3); 
+  filter:
+    drop-shadow(0 0 3px rgba(0, 0, 0, 0.08))
+    drop-shadow(1px 0px var(--svg-border-color)) drop-shadow(0px -1px var(--svg-border-color))
+    drop-shadow(-1px 0px var(--svg-border-color)) drop-shadow(0px 1px var(--svg-border-color));
 }
 
 .info-icon.outline {
