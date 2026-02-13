@@ -33,6 +33,7 @@ export interface PillPosition {
 export interface ExtensionSettings {
   pillPosition: PillPosition;
   pillVisibility: boolean;
+  pillShowFullInfo: boolean; // Whether pill shows expanded info (full mode)
   dataRetentionDays: number; // How many days to keep detailed session data
   excludedDomains: string[]; // Domains to ignore for tracking
 }

@@ -39,6 +39,7 @@ describe("BackgroundService", () => {
   const mockExtensionSettings: ExtensionSettings = {
     pillPosition: { x: 100, y: 100 },
     pillVisibility: true,
+    pillShowFullInfo: false,
     dataRetentionDays: 30,
     excludedDomains: [],
   };

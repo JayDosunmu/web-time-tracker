@@ -84,6 +84,7 @@ export class SettingsRepository {
       // Default to top-right: use large x value that will be clamped to right edge
       pillPosition: { x: 9999, y: 20 },
       pillVisibility: true,
+      pillShowFullInfo: false, // Start in minimal mode
       dataRetentionDays: 30,
       excludedDomains: [],
     };
