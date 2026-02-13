@@ -5,7 +5,7 @@
 
 import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { BsInfoCircle, BsInfoCircleFill } from 'react-icons/bs';
+import { RiInformation2Line, RiInformation2Fill } from 'react-icons/ri';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
 import { normalizeToReferencePhase } from '../../shared/utils';
@@ -241,13 +241,16 @@ export const Pill: FunctionComponent<PillProps> = ({
     const connectingPillClass = ['pill-card', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
     return (
       <div ref={pillRef} class="pill-wrapper" style={positionStyle}>
-        {/* Info Icon Button - disabled during connecting */}
-        <button class="info-button" disabled aria-label="Loading">
-          <div class="icon-container">
-            <span class="info-icon outline"><BsInfoCircle /></span>
-            <span class="info-icon filled"><BsInfoCircleFill /></span>
-          </div>
-        </button>
+        {/* Icons Container */}
+        <div class="icons-container">
+          {/* Info Icon Button - disabled during connecting */}
+          <button class="info-button" disabled aria-label="Loading">
+            <div class="icon-container">
+              <span class="info-icon outline"><RiInformation2Line /></span>
+              <span class="info-icon filled"><RiInformation2Fill /></span>
+            </div>
+          </button>
+        </div>
 
         <div class={connectingPillClass} onMouseDown={handleMouseDown}>
           <div class="pill-header">
@@ -292,19 +295,22 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   return (
     <div ref={pillRef} class="pill-wrapper" style={positionStyle}>
-      {/* Info Icon Button */}
-      <button
-        class={`info-button ${isFullMode ? 'active' : ''}`}
-        onClick={(e) => { e.stopPropagation(); onShowFullInfoChange(!isFullMode); }}
-        onMouseEnter={() => setIsInfoIconHovered(true)}
-        onMouseLeave={() => setIsInfoIconHovered(false)}
-        aria-label={showFullInfo ? 'Show less information' : 'Show more information'}
-      >
-        <div class="icon-container">
-          <span class="info-icon outline"><BsInfoCircle /></span>
-          <span class="info-icon filled"><BsInfoCircleFill /></span>
-        </div>
-      </button>
+      {/* Icons Container */}
+      <div class="icons-container">
+        {/* Info Icon Button */}
+        <button
+          class={`info-button ${isFullMode ? 'active' : ''}`}
+          onClick={(e) => { e.stopPropagation(); onShowFullInfoChange(!isFullMode); }}
+          onMouseEnter={() => setIsInfoIconHovered(true)}
+          onMouseLeave={() => setIsInfoIconHovered(false)}
+          aria-label={showFullInfo ? 'Show less information' : 'Show more information'}
+        >
+          <div class="icon-container">
+            <span class="info-icon outline"><RiInformation2Line size={24} /></span>
+            <span class="info-icon filled"><RiInformation2Fill size={24}/></span>
+          </div>
+        </button>
+      </div>
 
       {/* Pill Card */}
       <div class={pillClass} onMouseDown={handleMouseDown}>
