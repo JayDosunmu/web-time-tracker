@@ -5,6 +5,7 @@
 
 import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { BsInfoCircle, BsInfoCircleFill } from 'react-icons/bs';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
 import { normalizeToReferencePhase } from '../../shared/utils';
@@ -81,6 +82,11 @@ export const Pill: FunctionComponent<PillProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
+  const [isFullMode, setIsFullMode] = useState(false);
+  const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
+
+  // Derived: show full info when toggled ON or hovering (but not during drag)
+  const showFullInfo = (isFullMode || isInfoIconHovered) && !isDragging;
 
   const pillRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
@@ -229,29 +235,40 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   // Show connecting state while waiting for background service
   if (isConnecting && !sessionState) {
-    const pillClass = ['pill-card', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
+    const connectingPillClass = ['pill-card', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
     return (
-      <div
-        ref={pillRef}
-        class={pillClass}
-        style={positionStyle}
-        onMouseDown={handleMouseDown}
-      >
-        <div class="pill-header">
-          <span class="domain">--</span>
-        </div>
-        <div class="pill-main">
-          <span class="session-time">--:--:--</span>
-          <div class="total-block">
-            <span class="total-label">Total Time</span>
-            <span class="total-time">--:--:--</span>
+      <div ref={pillRef} class="pill-wrapper" style={positionStyle}>
+        {/* Info Icon Button - disabled during connecting */}
+        <button class="info-button" disabled aria-label="Loading">
+          <div class="icon-container">
+            <span class="info-icon outline"><BsInfoCircle /></span>
+            <span class="info-icon filled"><BsInfoCircleFill /></span>
           </div>
-        </div>
-        <div class="pill-footer">
-          <span class="clock-pill">
-            <span class="clock-label">Clock:</span>
-            <span class="clock">--:--:--</span>
-          </span>
+        </button>
+
+        <div class={connectingPillClass} onMouseDown={handleMouseDown}>
+          <div class="pill-header">
+            <span class="domain">--</span>
+          </div>
+          <div class="pill-main">
+            <span class="session-time">--:--:--</span>
+            <div class="secondary-block">
+              <div class="total-block">
+                <span class="total-label">Total Time</span>
+                <span class="total-time">--:--:--</span>
+              </div>
+              <div class="visit-count-block">
+                <span class="visits-label">Visits</span>
+                <span class="visits-value">--</span>
+              </div>
+            </div>
+          </div>
+          <div class="pill-footer">
+            <span class="clock-pill">
+              <span class="clock-label">Clock:</span>
+              <span class="clock">--:--:--</span>
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -267,34 +284,53 @@ export const Pill: FunctionComponent<PillProps> = ({
     !isActive ? 'inactive' : '',
     isPaused ? 'paused' : '',
     isDragging ? 'dragging' : '',
+    !showFullInfo ? 'minimal' : '',
   ].filter(Boolean).join(' ');
 
   return (
-    <div
-      ref={pillRef}
-      class={pillClass}
-      style={positionStyle}
-      onMouseDown={handleMouseDown}
-    >
-      {/* Row 1: Domain + visits */}
-      <div class="pill-header">
-        <span class="domain">{domain}</span>
-        <span class="visits">({visitCount} visits)</span>
-      </div>
-      {/* Row 2: Session time (left) + Total time block (right) */}
-      <div class="pill-main">
-        <span class="session-time">{formatTime(displayTime)}</span>
-        <div class="total-block">
-          <span class="total-label">Total Time</span>
-          <span class="total-time">{formatTime(totalTimeToday)}</span>
+    <div ref={pillRef} class="pill-wrapper" style={positionStyle}>
+      {/* Info Icon Button */}
+      <button
+        class={`info-button ${isFullMode ? 'active' : ''}`}
+        onClick={(e) => { e.stopPropagation(); setIsFullMode(prev => !prev); }}
+        onMouseEnter={() => setIsInfoIconHovered(true)}
+        onMouseLeave={() => setIsInfoIconHovered(false)}
+        aria-label={showFullInfo ? 'Show less information' : 'Show more information'}
+      >
+        <div class="icon-container">
+          <span class="info-icon outline"><BsInfoCircle /></span>
+          <span class="info-icon filled"><BsInfoCircleFill /></span>
         </div>
-      </div>
-      {/* Row 3: Clock in grey pill */}
-      <div class="pill-footer">
-        <span class="clock-pill">
-          <span class="clock-label">Clock:</span>
-          <span class="clock">{clockTime}</span>
-        </span>
+      </button>
+
+      {/* Pill Card */}
+      <div class={pillClass} onMouseDown={handleMouseDown}>
+        {/* Row 1: Domain + visits */}
+        <div class="pill-header">
+          <span class="domain">{domain}</span>
+          <span class="visits">({visitCount} visits)</span>
+        </div>
+        {/* Row 2: Session time (left) + Secondary block (right) */}
+        <div class="pill-main">
+          <span class="session-time">{formatTime(displayTime)}</span>
+          <div class="secondary-block">
+            <div class="total-block">
+              <span class="total-label">Total Time</span>
+              <span class="total-time">{formatTime(totalTimeToday)}</span>
+            </div>
+            <div class="visit-count-block">
+              <span class="visits-label">Visits</span>
+              <span class="visits-value">{visitCount}</span>
+            </div>
+          </div>
+        </div>
+        {/* Row 3: Clock in grey pill */}
+        <div class="pill-footer">
+          <span class="clock-pill">
+            <span class="clock-label">Clock:</span>
+            <span class="clock">{clockTime}</span>
+          </span>
+        </div>
       </div>
     </div>
   );
