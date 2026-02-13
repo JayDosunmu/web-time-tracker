@@ -178,14 +178,19 @@ export class ContentScriptManager {
     try {
       // Read settings directly from storage via repository
       const settings = await this.settingsRepository.getSettings();
-      const initialPosition = settings.pillPosition;
 
-      // Create and register TimeDisplayPill with saved position
-      const timeDisplayPill = new TimeDisplayPill(initialPosition);
+      // Create and register TimeDisplayPill with saved position and showFullInfo
+      const timeDisplayPill = new TimeDisplayPill(
+        settings.pillPosition,
+        settings.pillShowFullInfo,
+      );
 
-      // Wire up position change callback for persistence
+      // Wire up callbacks for persistence
       timeDisplayPill.setPositionChangeCallback(
         this.handlePositionChange.bind(this),
+      );
+      timeDisplayPill.setShowFullInfoChangeCallback(
+        this.handleShowFullInfoChange.bind(this),
       );
 
       this.registerComponent("timeDisplayPill", timeDisplayPill);
@@ -278,6 +283,7 @@ export class ContentScriptManager {
       this.broadcastToComponents("onSettingsChange", {
         pillPosition: settings.pillPosition,
         pillVisibility: settings.pillVisibility,
+        pillShowFullInfo: settings.pillShowFullInfo,
       });
 
       console.log("State refreshed from storage");
@@ -328,6 +334,27 @@ export class ContentScriptManager {
       }
     } catch (error) {
       console.error("Error saving pill position:", error);
+    }
+  }
+
+  /**
+   * Handle showFullInfo changes from TimeDisplayPill toggle
+   */
+  private async handleShowFullInfoChange(showFullInfo: boolean): Promise<void> {
+    try {
+      const response = await this.messageRouter.sendMessage({
+        type: "UPDATE_PILL_SHOW_FULL_INFO",
+        payload: { showFullInfo },
+      });
+
+      if (!response.success) {
+        console.error(
+          "Failed to save pill showFullInfo:",
+          response.error || "No response from background",
+        );
+      }
+    } catch (error) {
+      console.error("Error saving pill showFullInfo:", error);
     }
   }
 

@@ -70,7 +70,9 @@ interface PillProps {
   position: PillPosition;
   visible: boolean;
   isConnecting: boolean;
+  showFullInfo: boolean;
   onPositionChange: (position: PillPosition, source: PositionChangeSource) => void;
+  onShowFullInfoChange: (showFullInfo: boolean) => void;
 }
 
 export const Pill: FunctionComponent<PillProps> = ({
@@ -78,11 +80,12 @@ export const Pill: FunctionComponent<PillProps> = ({
   position,
   visible,
   isConnecting,
+  showFullInfo: isFullMode,
   onPositionChange,
+  onShowFullInfoChange,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
-  const [isFullMode, setIsFullMode] = useState(false);
   const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
 
   // Derived: show full info when toggled ON or hovering (but not during drag)
@@ -292,7 +295,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       {/* Info Icon Button */}
       <button
         class={`info-button ${isFullMode ? 'active' : ''}`}
-        onClick={(e) => { e.stopPropagation(); setIsFullMode(prev => !prev); }}
+        onClick={(e) => { e.stopPropagation(); onShowFullInfoChange(!isFullMode); }}
         onMouseEnter={() => setIsInfoIconHovered(true)}
         onMouseLeave={() => setIsInfoIconHovered(false)}
         aria-label={showFullInfo ? 'Show less information' : 'Show more information'}
@@ -347,17 +350,20 @@ export class TimeDisplayPill {
     position: PillPosition;
     visible: boolean;
     isConnecting: boolean;
+    showFullInfo: boolean;
   };
   private onPositionChangeCallback: ((position: PillPosition, source: PositionChangeSource) => void) | null = null;
+  private onShowFullInfoChangeCallback: ((showFullInfo: boolean) => void) | null = null;
   private animationFrameId: number | null = null;
 
-  constructor(initialPosition?: PillPosition) {
+  constructor(initialPosition?: PillPosition, initialShowFullInfo?: boolean) {
     this.state = {
       sessionState: null,
       // Use provided position or default to top-right (will be clamped to actual viewport)
       position: initialPosition ?? { x: 9999, y: 20 },
       visible: true,
       isConnecting: true,
+      showFullInfo: initialShowFullInfo ?? false,
     };
     this.mount();
   }
@@ -367,6 +373,13 @@ export class TimeDisplayPill {
    */
   public setPositionChangeCallback(callback: (position: PillPosition, source: PositionChangeSource) => void): void {
     this.onPositionChangeCallback = callback;
+  }
+
+  /**
+   * Set callback for showFullInfo changes (for persistence)
+   */
+  public setShowFullInfoChangeCallback(callback: (showFullInfo: boolean) => void): void {
+    this.onShowFullInfoChangeCallback = callback;
   }
 
   /**
@@ -390,6 +403,9 @@ export class TimeDisplayPill {
     }
     if (typeof settings.pillVisibility === 'boolean') {
       this.state.visible = settings.pillVisibility;
+    }
+    if (typeof settings.pillShowFullInfo === 'boolean') {
+      this.state.showFullInfo = settings.pillShowFullInfo;
     }
     this.updateAnimation(wasAnimating);
     this.renderComponent();
@@ -465,6 +481,14 @@ export class TimeDisplayPill {
     }
   };
 
+  private handleShowFullInfoChange = (showFullInfo: boolean): void => {
+    this.state.showFullInfo = showFullInfo;
+    this.renderComponent();
+    if (this.onShowFullInfoChangeCallback) {
+      this.onShowFullInfoChangeCallback(showFullInfo);
+    }
+  };
+
   private mount(): void {
     // Remove any existing pill (handles extension reload, HMR, re-injection)
     const existing = document.getElementById('web-time-tracker-pill');
@@ -499,7 +523,9 @@ export class TimeDisplayPill {
         position={this.state.position}
         visible={this.state.visible}
         isConnecting={this.state.isConnecting}
+        showFullInfo={this.state.showFullInfo}
         onPositionChange={this.handlePositionChange}
+        onShowFullInfoChange={this.handleShowFullInfoChange}
       />,
       this.container,
     );

@@ -29,6 +29,7 @@ describe("ContentScriptManager", () => {
   const mockSettings = {
     pillPosition: { x: 100, y: 100 },
     pillVisibility: true,
+    pillShowFullInfo: false,
     dataRetentionDays: 30,
     excludedDomains: [],
   };
@@ -74,6 +75,7 @@ describe("ContentScriptManager", () => {
       onSessionUpdate: jest.fn(),
       onSettingsChange: jest.fn(),
       setPositionChangeCallback: jest.fn(),
+      setShowFullInfoChangeCallback: jest.fn(),
       destroy: jest.fn(),
     } as any;
 
@@ -470,6 +472,7 @@ describe("ContentScriptManager", () => {
       const customSettings = {
         pillPosition: { x: 250, y: 100 },
         pillVisibility: false,
+        pillShowFullInfo: false,
         dataRetentionDays: 30,
         excludedDomains: [],
       };
@@ -497,6 +500,7 @@ describe("ContentScriptManager", () => {
       const customSettings = {
         pillPosition: { x: 300, y: 150 },
         pillVisibility: true,
+        pillShowFullInfo: false,
         dataRetentionDays: 30,
         excludedDomains: [],
       };
@@ -505,8 +509,8 @@ describe("ContentScriptManager", () => {
 
       await contentManager.initialize();
 
-      // Verify TimeDisplayPill was constructed with the position from storage
-      expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 });
+      // Verify TimeDisplayPill was constructed with the position and showFullInfo from storage
+      expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 }, false);
     });
   });
 

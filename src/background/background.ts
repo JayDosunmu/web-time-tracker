@@ -13,6 +13,7 @@ import type {
   ErrorReportMessage,
   GetSettingsMessage,
   UpdatePillPositionMessage,
+  UpdatePillShowFullInfoMessage,
 } from "../../types";
 import { DataModelManager } from "./services/DataModelManager";
 import { TimeTracker } from "./services/TimeTracker";
@@ -168,6 +169,13 @@ export class BackgroundService {
           );
           break;
 
+        case "UPDATE_PILL_SHOW_FULL_INFO":
+          await this.handleUpdatePillShowFullInfo(
+            message as UpdatePillShowFullInfoMessage,
+            sendResponse,
+          );
+          break;
+
         default:
           console.warn(
             `BackgroundService: Unhandled message type: ${message.type}`,
@@ -305,6 +313,31 @@ export class BackgroundService {
           error instanceof Error
             ? error.message
             : "Failed to update pill position",
+      });
+    }
+  }
+
+  private async handleUpdatePillShowFullInfo(
+    message: UpdatePillShowFullInfoMessage,
+    sendResponse: (response: MessageResponse) => void,
+  ): Promise<void> {
+    try {
+      await this.settingsRepository.updateSettings({
+        pillShowFullInfo: message.payload.showFullInfo,
+      });
+
+      sendResponse({ success: true });
+    } catch (error) {
+      console.error(
+        "BackgroundService.handleUpdatePillShowFullInfo error:",
+        error,
+      );
+      sendResponse({
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update pill show full info setting",
       });
     }
   }

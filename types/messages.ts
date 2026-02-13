@@ -87,6 +87,14 @@ export interface UpdatePillPositionMessage extends ExtensionMessage {
   };
 }
 
+// Update pill show full info setting
+export interface UpdatePillShowFullInfoMessage extends ExtensionMessage {
+  type: "UPDATE_PILL_SHOW_FULL_INFO";
+  payload: {
+    showFullInfo: boolean;
+  };
+}
+
 // Error report from content script
 export interface ErrorReportMessage extends ExtensionMessage {
   type: "ERROR_REPORT";
@@ -104,4 +112,5 @@ export type ExtensionMessageUnion =
   | RefreshStateMessage
   | GetSettingsMessage
   | UpdatePillPositionMessage
+  | UpdatePillShowFullInfoMessage
   | ErrorReportMessage;
