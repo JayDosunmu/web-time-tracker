@@ -424,13 +424,13 @@
    HIDDEN MODE STYLES
    ============================================ */
 
-/* Hidden mode: hide hideable icons (info) */
+/* Hidden mode: hide hideable tooltip containers (info) */
 .pill-wrapper.hidden .hideable {
   display: none;
 }
 
-/* Hidden mode: move drag icon to column 2 (next to visibility in column 3) */
-.pill-wrapper.hidden .drag-icon {
+/* Hidden mode: move drag tooltip container to column 2 (next to visibility in column 3) */
+.pill-wrapper.hidden .drag-tooltip {
   grid-column: 2;
 }
 

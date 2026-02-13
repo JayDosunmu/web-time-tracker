@@ -10,13 +10,15 @@ import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
-import { RiInformation2Line, RiInformation2Fill, RiEyeLine, RiEyeFill, RiDragMove2Line } from 'react-icons/ri';
+import { RiInformation2Line, RiInformation2Fill, RiEyeOffLine, RiEyeOffFill, RiDragMove2Line } from 'react-icons/ri';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
 import { normalizeToReferencePhase } from '../../shared/utils';
 import { ToggleIconButton } from './ToggleIconButton';
+import { Tooltip } from './Tooltip';
 import pillStyles from './TimeDisplayPill.styles.css?inline';
 import toggleIconButtonStyles from './ToggleIconButton.css?inline';
+import tooltipStyles from './Tooltip.css?inline';
 
 export type { PillPosition };
 
@@ -283,33 +285,38 @@ export const Pill: FunctionComponent<PillProps> = ({
         {/* Icons Container */}
         <div class="icons-container">
           {/* Drag Handle Icon */}
-          <button
-            class="drag-icon"
-            onMouseDown={handleMouseDown}
-            aria-label="Drag to reposition"
-          >
-            <RiDragMove2Line size={24} />
-          </button>
+          <Tooltip content="Drag to reposition" className="drag-tooltip">
+            <button
+              class="drag-icon"
+              onMouseDown={handleMouseDown}
+              aria-label="Drag to reposition"
+            >
+              <RiDragMove2Line size={24} />
+            </button>
+          </Tooltip>
           {/* Info Icon Button - disabled during connecting */}
-          <ToggleIconButton
-            isActive={false}
-            onToggle={() => {}}
-            activeIcon={RiInformation2Fill}
-            inactiveIcon={RiInformation2Line}
-            activeLabel="Show less information"
-            inactiveLabel="Show more information"
-            disabled={true}
-            className="hideable"
-          />
+          <Tooltip content="Show more" className="info-tooltip hideable">
+            <ToggleIconButton
+              isActive={false}
+              onToggle={() => {}}
+              activeIcon={RiInformation2Fill}
+              inactiveIcon={RiInformation2Line}
+              activeLabel="Show less information"
+              inactiveLabel="Show more information"
+              disabled={true}
+            />
+          </Tooltip>
           {/* Visibility Toggle Button */}
-          <ToggleIconButton
-            isActive={isHidden}
-            onToggle={() => onHiddenChange(!isHidden)}
-            activeIcon={RiEyeFill}
-            inactiveIcon={RiEyeLine}
-            activeLabel="Show timer pill"
-            inactiveLabel="Hide timer pill"
-          />
+          <Tooltip content={isHidden ? "Show timer" : "Hide timer"} className="visibility-tooltip">
+            <ToggleIconButton
+              isActive={isHidden}
+              onToggle={() => onHiddenChange(!isHidden)}
+              activeIcon={RiEyeOffFill}
+              inactiveIcon={RiEyeOffLine}
+              activeLabel="Show timer pill"
+              inactiveLabel="Hide timer pill"
+            />
+          </Tooltip>
         </div>
 
         <div class={connectingPillClass}>
@@ -357,53 +364,69 @@ export const Pill: FunctionComponent<PillProps> = ({
   const wrapperClass = ['pill-wrapper', hideCard ? 'hidden' : ''].filter(Boolean).join(' ');
 
   return (
-    <div
-      ref={pillRef}
-      class={wrapperClass}
-      style={positionStyle}
-    >
+    <div ref={pillRef} class={wrapperClass} style={positionStyle}>
       {/* Icons Container */}
       <div class="icons-container">
         {/* Drag Handle Icon */}
-        <button
-          class="drag-icon"
-          onMouseDown={handleMouseDown}
-          aria-label="Drag to reposition"
-        >
-          <RiDragMove2Line size={24} />
-        </button>
+        <Tooltip content="Drag to reposition" className="drag-tooltip">
+          <button
+            class="drag-icon"
+            onMouseDown={handleMouseDown}
+            aria-label="Drag to reposition"
+          >
+            <RiDragMove2Line size={24} />
+          </button>
+        </Tooltip>
         {/* Info Icon Button */}
-        <ToggleIconButton
-          isActive={isFullMode}
-          onToggle={() => onShowFullInfoChange(!isFullMode)}
-          activeIcon={RiInformation2Fill}
-          inactiveIcon={RiInformation2Line}
-          activeLabel="Show less information"
-          inactiveLabel="Show more information"
-          enableHoverPreview={true}
-          onHoverChange={setIsInfoIconHovered}
-          className="hideable"
-        />
+        <Tooltip
+          content={
+            <>
+              {(isFullMode ? "Shows more" : "Shows less") + " — press to toggle"}
+              <br />
+              <br />
+              Stays open while hovered over
+            </>
+          }
+          className="info-tooltip hideable"
+        >
+          <ToggleIconButton
+            isActive={isFullMode}
+            onToggle={() => onShowFullInfoChange(!isFullMode)}
+            activeIcon={RiInformation2Fill}
+            inactiveIcon={RiInformation2Line}
+            activeLabel="Show less information"
+            inactiveLabel="Show more information"
+            enableHoverPreview={true}
+            onHoverChange={setIsInfoIconHovered}
+          />
+        </Tooltip>
         {/* Visibility Toggle Button */}
-        <ToggleIconButton
-          isActive={isHidden}
-          onToggle={() => {
-            setVisibilityWasToggled(true);
-            onHiddenChange(!isHidden)
-          }}
-          enableHoverPreview={!isHidden}
-          onHoverChange={(isHovered: boolean) => {
-            setIsVisibilityIconHovered(isHovered);
-            // Reset the flag that visibility was toggled when mouse leaves the visibility icon.
-            if (!isHovered) {
-              setVisibilityWasToggled(false);
-            }
-          }}
-          activeIcon={RiEyeFill}
-          inactiveIcon={RiEyeLine}
-          activeLabel="Show timer pill"
-          inactiveLabel="Hide timer pill"
-        />
+        <Tooltip
+          content={
+            (isHidden ? "Show timer" : "Hide timer") + " — press to toggle"
+          }
+          className="visibility-tooltip"
+        >
+          <ToggleIconButton
+            isActive={isHidden}
+            onToggle={() => {
+              setVisibilityWasToggled(true);
+              onHiddenChange(!isHidden);
+            }}
+            enableHoverPreview={!isHidden}
+            onHoverChange={(isHovered: boolean) => {
+              setIsVisibilityIconHovered(isHovered);
+              // Reset the flag that visibility was toggled when mouse leaves the visibility icon.
+              if (!isHovered) {
+                setVisibilityWasToggled(false);
+              }
+            }}
+            activeIcon={RiEyeOffFill}
+            inactiveIcon={RiEyeOffLine}
+            activeLabel="Show timer pill"
+            inactiveLabel="Hide timer pill"
+          />
+        </Tooltip>
       </div>
 
       {/* Pill Card */}
@@ -625,7 +648,7 @@ export class TimeDisplayPill {
 
     // Inject styles into shadow root
     const style = document.createElement('style');
-    style.textContent = pillStyles + '\n' + toggleIconButtonStyles;
+    style.textContent = pillStyles + '\n' + toggleIconButtonStyles + '\n' + tooltipStyles;
     this.shadowRoot.appendChild(style);
 
     // Create render container for Preact
@@ -706,7 +729,7 @@ export async function createTimeDisplayPill(
   const ui = await createShadowRootUi(ctx, {
     name: 'web-time-tracker-pill',
     position: 'overlay',
-    css: pillStyles + '\n' + toggleIconButtonStyles,
+    css: pillStyles + '\n' + toggleIconButtonStyles + '\n' + tooltipStyles,
 
     onMount(container: HTMLElement) {
       // Define render function
