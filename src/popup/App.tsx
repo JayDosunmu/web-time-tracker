@@ -1,7 +1,7 @@
 import { type FunctionComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
 import type { ActiveTab, Day, History, ExtensionSettings } from "../../types";
-import { getDateKey } from "../shared/dateUtils";
+import { getDateKey } from "../shared/utils";
 
 interface SessionData {
   domain: string;

@@ -40,3 +40,21 @@ export const DAY_STORAGE_PREFIX = "day_";
 export function getDayStorageKey(timestamp: number = Date.now()): string {
   return `${DAY_STORAGE_PREFIX}${getDateKey(timestamp)}`;
 }
+
+/**
+ * Normalize a time value to have the same sub-second phase as a reference time.
+ * This ensures multiple times will tick to the next second at the same moment
+ * when displayed together.
+ *
+ * @param referenceTime - The reference time whose millisecond phase to use
+ * @param targetTime - The time to normalize
+ * @returns The target time adjusted to have the same millisecond offset as the reference
+ */
+export function normalizeToReferencePhase(
+  referenceTime: number,
+  targetTime: number
+): number {
+  const referenceMillis = referenceTime % 1000;
+  const targetSeconds = Math.floor(targetTime / 1000) * 1000;
+  return targetSeconds + referenceMillis;
+}

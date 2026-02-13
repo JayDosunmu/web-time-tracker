@@ -7,14 +7,15 @@ import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
+import { normalizeToReferencePhase } from '../../shared/utils';
 import pillStyles from './TimeDisplayPill.styles.css?inline';
 
 export type { PillPosition };
 
 export interface SessionState {
   domain: string;
-  currentTime: number;
-  totalTimeToday: number;
+  baseCurrentTime: number;
+  baseTotalTimeToday: number;
   visitCount: number;
   isActive: boolean;
   isPaused: boolean;
@@ -88,10 +89,28 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   const isActive = sessionState?.isActive ?? false;
   const isPaused = sessionState?.isPaused ?? false;
-  const displayTime = sessionState?.currentTime ?? 0;
-  const totalTimeToday = sessionState?.totalTimeToday ?? 0;
   const visitCount = sessionState?.visitCount ?? 0;
   const domain = sessionState?.domain ?? '';
+
+  // Calculate elapsed once for synchronized display of all times
+  const now = Date.now();
+  const startTime = sessionState?.startTime ?? now;
+  const elapsed = (isActive && !isPaused) ? now - startTime : 0;
+
+  // Normalize base times to have same sub-second phase as startTime
+  // This ensures all displayed times tick to the next second simultaneously
+  const normalizedCurrentTime = normalizeToReferencePhase(
+    startTime,
+    sessionState?.baseCurrentTime ?? 0
+  );
+  const normalizedTotalTime = normalizeToReferencePhase(
+    startTime,
+    sessionState?.baseTotalTimeToday ?? 0
+  );
+
+  const displayTime = normalizedCurrentTime + elapsed;
+  const totalTimeToday = normalizedTotalTime + elapsed;
+  const clockTime = formatClockTime(new Date(now));
 
   // Update cached bounds and clamp position on window resize (local only, not persisted)
   const updateBoundsAndPosition = useCallback(() => {
@@ -274,7 +293,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       <div class="pill-footer">
         <span class="clock-pill">
           <span class="clock-label">Clock:</span>
-          <span class="clock">{formatClockTime(new Date())}</span>
+          <span class="clock">{clockTime}</span>
         </span>
       </div>
     </div>
@@ -295,7 +314,6 @@ export class TimeDisplayPill {
   };
   private onPositionChangeCallback: ((position: PillPosition, source: PositionChangeSource) => void) | null = null;
   private animationFrameId: number | null = null;
-  private lastUpdateTime = 0;
 
   constructor(initialPosition?: PillPosition) {
     this.state = {
@@ -380,24 +398,13 @@ export class TimeDisplayPill {
   }
 
   /**
-   * Start the animation loop
+   * Start the animation loop for smooth time display updates
    */
   private startAnimation(): void {
     if (this.animationFrameId !== null) return;
 
-    this.lastUpdateTime = Date.now();
-
     const animate = (): void => {
       if (!this.state.sessionState) return;
-
-      const now = Date.now();
-      const elapsed = now - this.lastUpdateTime;
-
-      // Direct mutation - no object allocation needed for class state
-      this.state.sessionState.currentTime += elapsed;
-      this.state.sessionState.totalTimeToday += elapsed;
-      this.lastUpdateTime = now;
-
       this.renderComponent();
       this.animationFrameId = requestAnimationFrame(animate);
     };
