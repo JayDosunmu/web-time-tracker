@@ -5,20 +5,19 @@
  */
 
 import type { ActiveTab } from "../../../types";
-
-type StorageArea = browser.storage.StorageArea;
+import type { PersistenceManager } from "../storage/PersistenceManager";
 
 const STORAGE_KEY = "activeTab";
 
 export class TabRepository {
   private static instance: TabRepository | null = null;
-  private storage: StorageArea;
+  private storage: PersistenceManager;
 
-  private constructor(storage: StorageArea) {
+  private constructor(storage: PersistenceManager) {
     this.storage = storage;
   }
 
-  public static getInstance(storage?: StorageArea): TabRepository {
+  public static getInstance(storage?: PersistenceManager): TabRepository {
     if (!TabRepository.instance) {
       if (!storage) {
         throw new Error(

@@ -32,10 +32,6 @@ export class DataModelManager {
   // In-memory active tab state for fast access
   private activeTab: ActiveTab | null = null;
 
-  // Boundary detection timers
-  private hourBoundaryTimer: ReturnType<typeof setTimeout> | null = null;
-  private dayBoundaryTimer: ReturnType<typeof setTimeout> | null = null;
-
   private constructor(
     historyRepository: HistoryRepository,
     tabRepository: TabRepository,
@@ -88,9 +84,8 @@ export class DataModelManager {
         await this.tabRepository.setActiveTab(this.activeTab);
       }
 
-      // Setup boundary detection timers
-      this.setupHourBoundaryDetection();
-      this.setupDayBoundaryDetection();
+      // Setup boundary detection using browser.alarms (MV3 compatible)
+      this.setupAlarmBoundaryDetection();
 
       // Clear expired days based on retention settings
       await this.clearExpiredDays();
@@ -191,9 +186,6 @@ export class DataModelManager {
       await this.tabRepository.setActiveTab(this.activeTab);
 
       console.log("Hour boundary crossed, time recorded");
-
-      // Reset hour boundary timer
-      this.setupHourBoundaryDetection();
     } catch (error) {
       console.error("DataModelManager.handleHourElapsed error:", error);
     }
@@ -225,9 +217,8 @@ export class DataModelManager {
 
       console.log("Day boundary crossed, new day started");
 
-      // Reset boundary timers
-      this.setupDayBoundaryDetection();
-      this.setupHourBoundaryDetection();
+      // Re-setup boundary alarms for the new day
+      this.setupAlarmBoundaryDetection();
     } catch (error) {
       console.error("DataModelManager.handleDayElapsed error:", error);
     }
@@ -438,54 +429,41 @@ export class DataModelManager {
   }
 
   /**
-   * Setup hour boundary detection timer
+   * Setup boundary detection using browser.alarms API (MV3 compatible)
+   * Replaces setTimeout-based approach which doesn't work in MV3 service workers
    */
-  private setupHourBoundaryDetection(): void {
-    if (this.hourBoundaryTimer) {
-      clearTimeout(this.hourBoundaryTimer);
-    }
+  private setupAlarmBoundaryDetection(): void {
+    // Clear any existing alarms
+    browser.alarms.clear('hour-boundary');
+    browser.alarms.clear('day-boundary');
 
     const now = new Date();
-    const msUntilNextHour =
-      (60 - now.getMinutes()) * 60 * 1000 -
-      now.getSeconds() * 1000 -
-      now.getMilliseconds();
 
-    this.hourBoundaryTimer = setTimeout(() => {
-      this.handleHourElapsed();
-    }, msUntilNextHour);
-  }
+    // Calculate minutes until next hour (minimum 1 minute for Chrome alarms)
+    const minutesUntilNextHour = Math.max(1, 60 - now.getMinutes());
+    browser.alarms.create('hour-boundary', {
+      delayInMinutes: minutesUntilNextHour,
+      periodInMinutes: 60, // Repeat every hour
+    });
 
-  /**
-   * Setup day boundary detection timer
-   */
-  private setupDayBoundaryDetection(): void {
-    if (this.dayBoundaryTimer) {
-      clearTimeout(this.dayBoundaryTimer);
-    }
-
-    const now = new Date();
+    // Calculate minutes until midnight
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
-    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+    const minutesUntilMidnight = Math.max(1, Math.ceil((tomorrow.getTime() - now.getTime()) / 60000));
+    browser.alarms.create('day-boundary', {
+      delayInMinutes: minutesUntilMidnight,
+      periodInMinutes: 1440, // Repeat every 24 hours
+    });
 
-    this.dayBoundaryTimer = setTimeout(() => {
-      this.handleDayElapsed();
-    }, msUntilMidnight);
+    console.log(`Boundary alarms set: hour in ${minutesUntilNextHour}min, day in ${minutesUntilMidnight}min`);
   }
 
   /**
-   * Cleanup timers and resources
+   * Cleanup alarms and resources
    */
   private cleanup(): void {
-    if (this.hourBoundaryTimer) {
-      clearTimeout(this.hourBoundaryTimer);
-      this.hourBoundaryTimer = null;
-    }
-    if (this.dayBoundaryTimer) {
-      clearTimeout(this.dayBoundaryTimer);
-      this.dayBoundaryTimer = null;
-    }
+    browser.alarms.clear('hour-boundary');
+    browser.alarms.clear('day-boundary');
   }
 }

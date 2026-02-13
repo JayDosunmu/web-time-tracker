@@ -8,6 +8,8 @@ pnpm-debug.log*
 # Build outputs
 build/
 dist/
+.wxt/
+.output/
 *.tsbuildinfo
 
 # TypeScript cache

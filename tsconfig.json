@@ -1,55 +1,29 @@
 {
+  "extends": "./.wxt/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": true,
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "strict": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "./build",
-    "rootDir": ".",
-    "declaration": true,
-    "sourceMap": true,
-    "removeComments": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "allowJs": false,
-    "checkJs": false,
-    "incremental": true,
-    "tsBuildInfoFile": "./build/.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
       "@types/*": ["types/*"]
-    },
-    "types": [
-      "firefox-webext-browser",
-      "jest",
-      "@types/firefox-webext-browser"
-    ]
+    }
   },
   "include": [
     "src/**/*",
-    "types/**/*"
+    "types/**/*",
+    ".wxt/wxt.d.ts"
   ],
   "exclude": [
     "node_modules",
     "build",
     "dist",
-    "tests/**/*.test.ts",
-    "**/*.spec.ts"
-  ],
-  "ts-node": {
-    "esm": true
-  }
+    ".output"
+  ]
 }

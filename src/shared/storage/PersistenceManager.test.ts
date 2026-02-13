@@ -1,55 +1,55 @@
 /**
- * Comprehensive tests for StorageManager (Pure Generic CRUD Layer)
+ * Comprehensive tests for PersistenceManager (Pure Generic CRUD Layer)
  *
- * StorageManager is now a pure generic CRUD abstraction.
+ * PersistenceManager is now a pure generic CRUD abstraction.
  * Domain-specific operations are handled by repositories.
  */
 
 import browser from "sinon-chrome";
 
-import { StorageManager } from "./StorageManager";
+import { PersistenceManager } from "./PersistenceManager";
 import { testUtils } from "../../../tests/utils";
 
-describe("StorageManager", () => {
-  let storageManager: StorageManager;
+describe("PersistenceManager", () => {
+  let persistenceManager: PersistenceManager;
 
-  // Because the StorageManager is a singleton, and reset before each test,
+  // Because the PersistenceManager is a singleton, and reset before each test,
   // the tests can't run concurrently.
   beforeEach(() => {
     testUtils.resetAll();
-    StorageManager.resetInstance();
-    storageManager = StorageManager.getInstance(
+    PersistenceManager.resetInstance();
+    persistenceManager = PersistenceManager.getInstance(
       browser.storage.local as unknown as chrome.storage.StorageArea
     );
   });
 
   describe("Singleton Pattern", () => {
     it("should return the same instance", () => {
-      const instance1 = StorageManager.getInstance();
-      const instance2 = StorageManager.getInstance();
+      const instance1 = PersistenceManager.getInstance();
+      const instance2 = PersistenceManager.getInstance();
       expect(instance1).toBe(instance2);
     });
 
     it("should reset instance for testing", () => {
-      const instance1 = StorageManager.getInstance();
-      StorageManager.resetInstance();
-      const instance2 = StorageManager.getInstance(
+      const instance1 = PersistenceManager.getInstance();
+      PersistenceManager.resetInstance();
+      const instance2 = PersistenceManager.getInstance(
         browser.storage.local as unknown as chrome.storage.StorageArea
       );
       expect(instance1).not.toBe(instance2);
     });
 
     it("should throw error when getting instance without storage on first call", () => {
-      StorageManager.resetInstance();
-      expect(() => StorageManager.getInstance()).toThrow(
-        "StorageManager must be initialized with storage parameter on first call"
+      PersistenceManager.resetInstance();
+      expect(() => PersistenceManager.getInstance()).toThrow(
+        "PersistenceManager must be initialized with storage parameter on first call"
       );
     });
   });
 
   describe("Storage Access", () => {
     it("should expose underlying storage area", () => {
-      const storage = storageManager.getStorage();
+      const storage = persistenceManager.getStorage();
       // sinon-chrome creates proxies, so we verify by checking key methods exist
       expect(storage.get).toBeDefined();
       expect(storage.set).toBeDefined();
@@ -62,7 +62,7 @@ describe("StorageManager", () => {
     it("should set data", async () => {
       const testData = { testKey: "testValue" };
 
-      await storageManager.set(testData);
+      await persistenceManager.set(testData);
 
       const storedData = await browser.storage.local.get(["testKey"]);
       expect(storedData.testKey).toBe("testValue");
@@ -75,7 +75,7 @@ describe("StorageManager", () => {
         mixed: { items: ["a", "b"], count: 2 },
       };
 
-      await storageManager.set(complexData);
+      await persistenceManager.set(complexData);
 
       const storedData = await browser.storage.local.get([
         "nested",
@@ -90,7 +90,7 @@ describe("StorageManager", () => {
     it("should get data by single key", async () => {
       await browser.storage.local.set({ myKey: "myValue" });
 
-      const result = await storageManager.get("myKey");
+      const result = await persistenceManager.get("myKey");
 
       expect(result.myKey).toBe("myValue");
     });
@@ -102,7 +102,7 @@ describe("StorageManager", () => {
         key3: "value3",
       });
 
-      const result = await storageManager.get(["key1", "key2"]);
+      const result = await persistenceManager.get(["key1", "key2"]);
 
       expect(result.key1).toBe("value1");
       expect(result.key2).toBe("value2");
@@ -110,7 +110,7 @@ describe("StorageManager", () => {
     });
 
     it("should return empty object for non-existent keys", async () => {
-      const result = await storageManager.get("nonExistentKey");
+      const result = await persistenceManager.get("nonExistentKey");
 
       expect(result.nonExistentKey).toBeUndefined();
     });
@@ -118,7 +118,7 @@ describe("StorageManager", () => {
     it("should remove data by single key", async () => {
       await browser.storage.local.set({ toRemove: "value" });
 
-      await storageManager.remove("toRemove");
+      await persistenceManager.remove("toRemove");
 
       const result = await browser.storage.local.get(["toRemove"]);
       expect(result.toRemove).toBeUndefined();
@@ -131,7 +131,7 @@ describe("StorageManager", () => {
         keep: "value3",
       });
 
-      await storageManager.remove(["remove1", "remove2"]);
+      await persistenceManager.remove(["remove1", "remove2"]);
 
       const result = await browser.storage.local.get([
         "remove1",
@@ -149,7 +149,7 @@ describe("StorageManager", () => {
         data2: "value2",
       });
 
-      await storageManager.clear();
+      await persistenceManager.clear();
 
       const result = await browser.storage.local.get();
       expect(result).toEqual({});
@@ -165,13 +165,13 @@ describe("StorageManager", () => {
       };
       await browser.storage.local.set(testData);
 
-      const result = await storageManager.getAll();
+      const result = await persistenceManager.getAll();
 
       expect(result).toEqual(testData);
     });
 
     it("should return empty object when storage is empty", async () => {
-      const result = await storageManager.getAll();
+      const result = await persistenceManager.getAll();
 
       expect(result).toEqual({});
     });
@@ -184,7 +184,7 @@ describe("StorageManager", () => {
         throw new Error("Storage read error");
       });
 
-      await expect(storageManager.get("anyKey")).rejects.toThrow(
+      await expect(persistenceManager.get("anyKey")).rejects.toThrow(
         "Failed to get storage data"
       );
     });
@@ -195,7 +195,7 @@ describe("StorageManager", () => {
         throw new Error("Storage full");
       });
 
-      await expect(storageManager.set({ key: "value" })).rejects.toThrow(
+      await expect(persistenceManager.set({ key: "value" })).rejects.toThrow(
         "Failed to set storage data"
       );
     });
@@ -206,7 +206,7 @@ describe("StorageManager", () => {
         throw new Error("Remove failed");
       });
 
-      await expect(storageManager.remove("anyKey")).rejects.toThrow(
+      await expect(persistenceManager.remove("anyKey")).rejects.toThrow(
         "Failed to remove storage data"
       );
     });
@@ -217,7 +217,7 @@ describe("StorageManager", () => {
         throw new Error("Clear failed");
       });
 
-      await expect(storageManager.clear()).rejects.toThrow(
+      await expect(persistenceManager.clear()).rejects.toThrow(
         "Failed to clear storage data"
       );
     });
@@ -228,7 +228,7 @@ describe("StorageManager", () => {
         throw new Error("Storage error");
       });
 
-      await expect(storageManager.getAll()).rejects.toThrow(
+      await expect(persistenceManager.getAll()).rejects.toThrow(
         "Failed to get all storage data"
       );
     });

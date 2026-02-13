@@ -5,18 +5,20 @@
  * eliminating dependency on background script for data retrieval.
  */
 
+import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import type {
   RefreshStateMessage,
   PillPosition,
   PositionChangeSource,
 } from "../../types";
 import { MessageRouter } from "./messaging/MessageRouter";
-import { TimeDisplayPill } from "./components/TimeDisplayPill";
+import { TimeDisplayPill, createTimeDisplayPill, type TimeDisplayPillApi } from "./components/TimeDisplayPill";
 import {
   SettingsRepository,
   TabRepository,
   HistoryRepository,
 } from "../shared/repositories";
+import { PersistenceManager } from "../shared/storage/PersistenceManager";
 import { getDateKey } from "../shared/utils";
 
 export class ContentScriptManager {
@@ -30,6 +32,7 @@ export class ContentScriptManager {
   private components = new Map<string, any>();
   private visibilityHandler: (() => void) | null = null;
   private abortController: AbortController | null = null;
+  private ctx: ContentScriptContext | null = null;
 
   private constructor() {
     this.messageRouter = new MessageRouter();
@@ -37,7 +40,7 @@ export class ContentScriptManager {
     this.abortController = new AbortController();
 
     // Initialize repositories for direct storage access
-    const storage = browser.storage.local;
+    const storage = PersistenceManager.getInstance(browser.storage.local);
     this.settingsRepository = SettingsRepository.getInstance(storage);
     this.tabRepository = TabRepository.getInstance(storage);
     this.historyRepository = HistoryRepository.getInstance(storage);
@@ -61,6 +64,13 @@ export class ContentScriptManager {
       ContentScriptManager.instance.destroy();
     }
     ContentScriptManager.instance = null;
+  }
+
+  /**
+   * Set the WXT ContentScriptContext for Shadow DOM UI creation
+   */
+  public setContext(ctx: ContentScriptContext): void {
+    this.ctx = ctx;
   }
 
   /**
@@ -179,12 +189,26 @@ export class ContentScriptManager {
       // Read settings directly from storage via repository
       const settings = await this.settingsRepository.getSettings();
 
-      // Create and register TimeDisplayPill with saved position, showFullInfo, and hidden state
-      const timeDisplayPill = new TimeDisplayPill(
-        settings.pillPosition,
-        settings.pillShowFullInfo,
-        settings.pillHidden,
-      );
+      // Create TimeDisplayPill using WXT's createShadowRootUi if context is available
+      // Falls back to class-based approach for backward compatibility (tests)
+      let timeDisplayPill: TimeDisplayPillApi;
+
+      if (this.ctx) {
+        // Use WXT factory function for HMR support and automatic cleanup
+        timeDisplayPill = await createTimeDisplayPill(
+          this.ctx,
+          settings.pillPosition,
+          settings.pillShowFullInfo,
+          settings.pillHidden,
+        );
+      } else {
+        // Fallback to class-based approach (for tests or non-WXT environments)
+        timeDisplayPill = new TimeDisplayPill(
+          settings.pillPosition,
+          settings.pillShowFullInfo,
+          settings.pillHidden,
+        );
+      }
 
       // Wire up callbacks for persistence
       timeDisplayPill.setPositionChangeCallback(
@@ -439,7 +463,7 @@ export class ContentScriptManager {
 
   /**
    * Extract domain from URL
-   * TODO: this looks like a duplicate of the one in StorageManager.ts
+   * TODO: this looks like a duplicate of the one in PersistenceManager.ts
    */
   private extractDomain(url: string): string {
     try {

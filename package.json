@@ -4,17 +4,21 @@
   "description": "Firefox extension to track time spent on different domains",
   "main": "dist/background.js",
   "scripts": {
-    "build:dev": "vite build",
-    "build:prod": "NODE_ENV=production vite build",
-    "dev": "vite build --watch",
+    "dev": "wxt",
+    "dev:firefox": "wxt --browser firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build --browser firefox",
+    "build:all": "npm run build && npm run build:firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip --browser firefox",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"types/**/*.ts\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" \"types/**/*.ts\" --fix",
-    "clean": "rimraf build dist",
-    "package": "npm run build:prod && web-ext build --source-dir dist"
+    "clean": "rimraf .output .wxt build dist",
+    "prepare": "wxt prepare"
   },
   "dependencies": {
     "preact": "^10.28.3",
@@ -40,8 +44,7 @@
     "ts-jest": "^29.4.0",
     "typescript": "^5.8.3",
     "vite": "^7.3.1",
-    "vite-plugin-web-extension": "^4.5.0",
-    "web-ext": "^8.9.0"
+    "wxt": "^0.20.17"
   },
   "jest": {
     "preset": "ts-jest",
@@ -83,7 +86,9 @@
       "^react-dom/test-utils$": "<rootDir>/node_modules/preact/test-utils/dist/testUtils.js",
       "^react/jsx-runtime$": "<rootDir>/node_modules/preact/jsx-runtime/dist/jsxRuntime.js",
       "\\.css\\?inline$": "<rootDir>/tests/css-inline-mock.js",
-      "\\.css$": "<rootDir>/tests/css-inline-mock.js"
+      "\\.css$": "<rootDir>/tests/css-inline-mock.js",
+      "^wxt/utils/content-script-ui/shadow-root$": "<rootDir>/tests/wxt-mock.js",
+      "^wxt/utils/content-script-context$": "<rootDir>/tests/wxt-mock.js"
     },
     "transform": {
       "^.+\\.tsx?$": [
