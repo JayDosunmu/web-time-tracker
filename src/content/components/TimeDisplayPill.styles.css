@@ -1,4 +1,85 @@
-/* Font stacks */
+/* ============================================
+   WRAPPER & INFO ICON STYLES
+   ============================================ */
+
+.pill-wrapper {
+  --transition-duration: 0.25s;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  position: fixed;
+  z-index: 2147483647;
+}
+
+/* Info button */
+.info-button {
+  border: none;
+  background: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--color-muted);
+  margin-top: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-button:hover {
+  color: var(--color-primary);
+}
+
+.info-button:focus {
+  outline: none;
+}
+
+.info-button:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Icon container for crossfade */
+.icon-container {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+
+.info-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  transition: opacity var(--transition-duration) var(--transition-timing);
+}
+
+.info-icon.outline {
+  opacity: 1;
+}
+
+.info-icon.filled {
+  opacity: 0;
+}
+
+/* Show filled icon on hover or when active */
+.info-button:hover .info-icon.outline,
+.info-button.active .info-icon.outline {
+  opacity: 0;
+}
+
+.info-button:hover .info-icon.filled,
+.info-button.active .info-icon.filled {
+  opacity: 1;
+}
+
+/* ============================================
+   PILL CARD STYLES
+   ============================================ */
+
+/* Font stacks and color palette */
 .pill-card {
   --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'SF Mono', Monaco, 'Lucida Console', Consolas, monospace;
@@ -16,8 +97,7 @@
 }
 
 .pill-card {
-  position: fixed;
-  z-index: 2147483647;
+  position: static; /* Changed from fixed - wrapper handles positioning */
 
   /* Fixed dimensions */
   width: 160px;
@@ -70,7 +150,20 @@
   font-weight: 400;
   color: var(--color-secondary);
   margin-bottom: 10px;
-  /* line-height: 1.2; */
+  /* Slide animation */
+  overflow: hidden;
+  max-height: 30px;
+  transition:
+    max-height var(--transition-duration) var(--transition-timing),
+    opacity var(--transition-duration) var(--transition-timing),
+    margin-bottom var(--transition-duration) var(--transition-timing);
+}
+
+/* Minimal mode: header slides up (collapses) */
+.pill-card.minimal .pill-header {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
 }
 
 .pill-header .domain {
@@ -129,12 +222,87 @@
   color: var(--color-muted);
 }
 
+/* Secondary block container - holds crossfading total/visit blocks */
+.secondary-block {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 50px;
+}
+
+/* Total block transitions */
+.total-block {
+  transition: opacity var(--transition-duration) var(--transition-timing);
+}
+
+/* Visit count block - visible in minimal mode, positioned absolutely to overlap */
+.visit-count-block {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  transition: opacity var(--transition-duration) var(--transition-timing);
+}
+
+.visits-label {
+  font-size: 8px;
+  font-weight: 500;
+  color: var(--color-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.visits-value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+/* Full mode: show total-block, hide visit-count-block */
+.pill-card:not(.minimal) .total-block {
+  opacity: 1;
+}
+
+.pill-card:not(.minimal) .visit-count-block {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Minimal mode: hide total-block, show visit-count-block */
+.pill-card.minimal .total-block {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pill-card.minimal .visit-count-block {
+  opacity: 1;
+}
+
 /* Row 3: Clock in centered grey pill */
 .pill-footer {
   display: flex;
   justify-content: center;
   align-items: center;
   margin-top: 14px;
+  /* Slide animation */
+  overflow: hidden;
+  max-height: 40px;
+  transition:
+    max-height var(--transition-duration) var(--transition-timing),
+    opacity var(--transition-duration) var(--transition-timing),
+    margin-top var(--transition-duration) var(--transition-timing);
+}
+
+/* Minimal mode: footer slides down (collapses) */
+.pill-card.minimal .pill-footer {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
 }
 
 .pill-footer .clock-pill {
@@ -248,7 +416,12 @@
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   .pill-card,
-  .pill-card::after {
+  .pill-card::after,
+  .info-icon,
+  .pill-header,
+  .pill-footer,
+  .total-block,
+  .visit-count-block {
     transition: none;
   }
 }
