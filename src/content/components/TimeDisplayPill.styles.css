@@ -23,79 +23,6 @@
   flex-shrink: 0;
 }
 
-/* Info button */
-.info-button {
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  /* Circular button sizing - slightly larger than icon for padding */
-  width: 26px;
-  height: 26px;
-
-  /* Remove default button background */
-  background: transparent;
-  border-radius: 50%;
-
-  /* White icon */
-  color: white;
-}
-
-.info-button:focus {
-  outline: none;
-}
-
-.info-button:focus-visible {
-  outline: 2px solid var(--color-accent-blue);
-  outline-offset: 2px;
-}
-
-/* Icon container for crossfade */
-.icon-container {
-  position: relative;
-  width: 24px;
-  height: 24px;
-}
-
-.info-icon {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  transition: opacity var(--transition-duration) var(--transition-timing);
-}
-
-.info-icon svg {
-  --svg-border-color: rgba(0, 0, 0, 0.3); 
-  filter:
-    drop-shadow(0 0 3px rgba(0, 0, 0, 0.08))
-    drop-shadow(1px 0px var(--svg-border-color)) drop-shadow(0px -1px var(--svg-border-color))
-    drop-shadow(-1px 0px var(--svg-border-color)) drop-shadow(0px 1px var(--svg-border-color));
-}
-
-.info-icon.outline {
-  opacity: 1;
-}
-
-.info-icon.filled {
-  opacity: 0;
-}
-
-/* Show filled icon on hover or when active */
-.info-button:hover .info-icon.outline,
-.info-button.active .info-icon.outline {
-  opacity: 0;
-}
-
-.info-button:hover .info-icon.filled,
-.info-button.active .info-icon.filled {
-  opacity: 1;
-}
-
 /* ============================================
    PILL CARD STYLES
    ============================================ */
@@ -438,7 +365,6 @@
 @media (prefers-reduced-motion: reduce) {
   .pill-card,
   .pill-card::after,
-  .info-icon,
   .pill-header,
   .pill-footer,
   .total-block,

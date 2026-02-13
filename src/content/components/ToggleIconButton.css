@@ -1,0 +1,101 @@
+/* ============================================
+   TOGGLE ICON BUTTON - Reusable Component
+   ============================================ */
+
+.toggle-icon-button {
+  /* CSS custom properties for customization */
+  --toggle-transition-duration: 0.25s;
+  --toggle-transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --toggle-icon-size: 24px;
+  --toggle-button-size: 26px;
+  --toggle-focus-color: #1b72e2;
+  --toggle-icon-color: white;
+  --toggle-svg-border-color: rgba(0, 0, 0, 0.3);
+
+  /* Reset button styles */
+  border: none;
+  padding: 0;
+  background: transparent;
+
+  /* Button sizing */
+  width: var(--toggle-button-size);
+  height: var(--toggle-button-size);
+  border-radius: 50%;
+
+  /* Layout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  /* Interaction */
+  cursor: pointer;
+
+  /* Icon color */
+  color: var(--toggle-icon-color);
+}
+
+.toggle-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.toggle-icon-button:focus {
+  outline: none;
+}
+
+.toggle-icon-button:focus-visible {
+  outline: 2px solid var(--toggle-focus-color);
+  outline-offset: 2px;
+}
+
+/* Icon container for crossfade effect */
+.toggle-icon-container {
+  position: relative;
+  width: var(--toggle-icon-size);
+  height: var(--toggle-icon-size);
+}
+
+/* Individual icon positioning */
+.toggle-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  transition: opacity var(--toggle-transition-duration) var(--toggle-transition-timing);
+}
+
+/* SVG drop shadow for visibility on any background */
+.toggle-icon svg {
+  filter:
+    drop-shadow(0 0 3px rgba(0, 0, 0, 0.08))
+    drop-shadow(1px 0px var(--toggle-svg-border-color))
+    drop-shadow(0px -1px var(--toggle-svg-border-color))
+    drop-shadow(-1px 0px var(--toggle-svg-border-color))
+    drop-shadow(0px 1px var(--toggle-svg-border-color));
+}
+
+/* Inactive icon - visible by default */
+.toggle-icon.inactive {
+  opacity: 1;
+}
+
+.toggle-icon.inactive.hidden {
+  opacity: 0;
+}
+
+/* Active icon - hidden by default */
+.toggle-icon.active {
+  opacity: 0;
+}
+
+.toggle-icon.active:not(.hidden) {
+  opacity: 1;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .toggle-icon {
+    transition: none;
+  }
+}
