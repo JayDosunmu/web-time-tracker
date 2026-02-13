@@ -9,7 +9,9 @@ import { RiInformation2Line, RiInformation2Fill } from 'react-icons/ri';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
 import { normalizeToReferencePhase } from '../../shared/utils';
+import { ToggleIconButton } from './ToggleIconButton';
 import pillStyles from './TimeDisplayPill.styles.css?inline';
+import toggleIconButtonStyles from './ToggleIconButton.css?inline';
 
 export type { PillPosition };
 
@@ -244,12 +246,15 @@ export const Pill: FunctionComponent<PillProps> = ({
         {/* Icons Container */}
         <div class="icons-container">
           {/* Info Icon Button - disabled during connecting */}
-          <button class="info-button" disabled aria-label="Loading">
-            <div class="icon-container">
-              <span class="info-icon outline"><RiInformation2Line /></span>
-              <span class="info-icon filled"><RiInformation2Fill /></span>
-            </div>
-          </button>
+          <ToggleIconButton
+            isActive={false}
+            onToggle={() => {}}
+            activeIcon={RiInformation2Fill}
+            inactiveIcon={RiInformation2Line}
+            activeLabel="Show less information"
+            inactiveLabel="Show more information"
+            disabled={true}
+          />
         </div>
 
         <div class={connectingPillClass} onMouseDown={handleMouseDown}>
@@ -298,18 +303,16 @@ export const Pill: FunctionComponent<PillProps> = ({
       {/* Icons Container */}
       <div class="icons-container">
         {/* Info Icon Button */}
-        <button
-          class={`info-button ${isFullMode ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); onShowFullInfoChange(!isFullMode); }}
-          onMouseEnter={() => setIsInfoIconHovered(true)}
-          onMouseLeave={() => setIsInfoIconHovered(false)}
-          aria-label={showFullInfo ? 'Show less information' : 'Show more information'}
-        >
-          <div class="icon-container">
-            <span class="info-icon outline"><RiInformation2Line size={24} /></span>
-            <span class="info-icon filled"><RiInformation2Fill size={24}/></span>
-          </div>
-        </button>
+        <ToggleIconButton
+          isActive={isFullMode}
+          onToggle={() => onShowFullInfoChange(!isFullMode)}
+          activeIcon={RiInformation2Fill}
+          inactiveIcon={RiInformation2Line}
+          activeLabel="Show less information"
+          inactiveLabel="Show more information"
+          enableHoverPreview={true}
+          onHoverChange={setIsInfoIconHovered}
+        />
       </div>
 
       {/* Pill Card */}
@@ -510,7 +513,7 @@ export class TimeDisplayPill {
 
     // Inject styles into shadow root
     const style = document.createElement('style');
-    style.textContent = pillStyles;
+    style.textContent = pillStyles + '\n' + toggleIconButtonStyles;
     this.shadowRoot.appendChild(style);
 
     // Create render container for Preact
