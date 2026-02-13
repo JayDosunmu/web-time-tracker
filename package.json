@@ -21,6 +21,7 @@
     "prepare": "wxt prepare"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.7.5",
     "preact": "^10.28.3",
     "react-icons": "^5.5.0",
     "webextension-polyfill": "^0.12.0"
