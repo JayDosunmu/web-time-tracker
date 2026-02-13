@@ -95,14 +95,29 @@ export const Pill: FunctionComponent<PillProps> = ({
   const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
   const [isVisibilityIconHovered, setIsVisibilityIconHovered] = useState(false);
 
-  // Derived: show full info when toggled ON or hovering (but not during drag)
-  const showFullInfo = (isFullMode || isInfoIconHovered);
-  const hideCard = (isHidden !== isVisibilityIconHovered)
-
   const pillRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
   const boundsRef = useRef({ maxX: 0, maxY: 0 });
   const prevPositionRef = useRef<PillPosition>(position);
+  // Captures isHidden at hover start so clicking while hovering doesn't flip the preview
+  const visibilityBaselineRef = useRef<boolean | null>(null);
+
+  // Derived: show full info when toggled ON or hovering (but not during drag)
+  const showFullInfo = (isFullMode || isInfoIconHovered);
+  // When hovering, show preview based on baseline captured at hover start (not current isHidden)
+  // This prevents clicking while hovering from flipping the preview state
+  const hideCard = isVisibilityIconHovered
+    ? !visibilityBaselineRef.current
+    : isHidden;
+
+  const handleVisibilityHoverChange = (hovered: boolean): void => {
+    if (hovered) {
+      visibilityBaselineRef.current = isHidden;
+    } else {
+      visibilityBaselineRef.current = null;
+    }
+    setIsVisibilityIconHovered(hovered);
+  };
 
   const isActive = sessionState?.isActive ?? false;
   const isPaused = sessionState?.isPaused ?? false;
@@ -336,7 +351,7 @@ export const Pill: FunctionComponent<PillProps> = ({
           isActive={isHidden}
           onToggle={() => onHiddenChange(!isHidden)}
           enableHoverPreview={!isHidden}
-          onHoverChange={setIsVisibilityIconHovered}
+          onHoverChange={handleVisibilityHoverChange}
           activeIcon={RiEyeFill}
           inactiveIcon={RiEyeLine}
           activeLabel="Show timer pill"
