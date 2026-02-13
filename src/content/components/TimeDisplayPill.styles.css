@@ -97,7 +97,7 @@
 }
 
 .pill-card {
-  position: static; /* Changed from fixed - wrapper handles positioning */
+  position: relative; /* Needed for ::after pseudo-element positioning */
 
   /* Fixed dimensions */
   width: 160px;
