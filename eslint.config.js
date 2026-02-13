@@ -1,9 +1,11 @@
 import eslint from "@eslint/js";
 import tseslint from "@typescript-eslint/eslint-plugin";
 import tsparser from "@typescript-eslint/parser";
+import wxtAutoImports from "./.wxt/eslint-auto-imports.mjs";
 
 export default [
   eslint.configs.recommended,
+  wxtAutoImports,
   {
     ignores: ["**/*.test.ts", "**/*.spec.ts", "tests/**"],
   },

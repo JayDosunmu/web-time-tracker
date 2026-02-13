@@ -16,13 +16,9 @@ import type {
   UpdatePillShowFullInfoMessage,
   UpdatePillHiddenMessage,
 } from "../../types";
-import { DataModelManager } from "./services/DataModelManager";
-import { TimeTracker } from "./services/TimeTracker";
-import {
-  HistoryRepository,
-  TabRepository,
-  SettingsRepository,
-} from "../shared/repositories";
+import type { DataModelManager } from "./services/DataModelManager";
+import type { TimeTracker } from "./services/TimeTracker";
+import type { SettingsRepository } from "../shared/repositories";
 
 export class BackgroundService {
   private static instance: BackgroundService | null = null;
@@ -66,7 +62,9 @@ export class BackgroundService {
   }
 
   /**
-   * Initialize the background service and register event listeners
+   * Initialize the background service
+   * Note: Event listeners should be registered separately via registerEventListeners()
+   * before calling this method (MV3 requirement)
    */
   public async initialize(): Promise<void> {
     try {
@@ -76,9 +74,6 @@ export class BackgroundService {
 
       // Initialize data model manager
       await this.dataModelManager.initialize();
-
-      // Register browser event listeners
-      this.registerEventListeners();
 
       // Register message listeners for content script communication
       this.registerMessageListeners();
@@ -424,8 +419,9 @@ export class BackgroundService {
 
   /**
    * Register all browser event listeners
+   * Must be called synchronously before any async operations (MV3 requirement)
    */
-  private registerEventListeners(): void {
+  public registerEventListeners(): void {
     // Tab activation event
     browser.tabs.onActivated.addListener(this.handleTabActivated.bind(this));
 
@@ -664,69 +660,3 @@ export class BackgroundService {
     }
   }
 }
-
-// --- Bootstrap ---
-
-/**
- * Initialize and start the background service
- */
-(async function bootstrap(): Promise<void> {
-  try {
-    const storage = browser.storage.local;
-
-    // Initialize repositories
-    const historyRepository = HistoryRepository.getInstance(storage);
-    const tabRepository = TabRepository.getInstance(storage);
-    const settingsRepository = SettingsRepository.getInstance(storage);
-
-    // Initialize DataModelManager
-    const dataModelManager = DataModelManager.getInstance(
-      historyRepository,
-      tabRepository,
-      settingsRepository,
-    );
-
-    // Initialize TimeTracker
-    const timeTracker = TimeTracker.getInstance(dataModelManager);
-
-    // Initialize BackgroundService
-    const backgroundService = BackgroundService.getInstance(
-      dataModelManager,
-      timeTracker,
-      settingsRepository,
-    );
-
-    await backgroundService.initialize();
-    console.log("Web Time Tracker background service started");
-  } catch (error) {
-    console.error("Failed to bootstrap background service:", error);
-  }
-})();
-
-/**
- * Handle extension install/update events
- * Notifies existing content scripts to refresh their state from storage
- */
-browser.runtime.onInstalled.addListener(async (details) => {
-  console.log(`Extension ${details.reason}: notifying existing tabs`);
-
-  // Wait a short moment for content scripts to be ready
-  await new Promise((resolve) => setTimeout(resolve, 200));
-
-  // Notify all HTTP/HTTPS tabs to refresh their state
-  const tabs = await browser.tabs.query({});
-  for (const tab of tabs) {
-    if (tab.id && tab.url?.startsWith("http")) {
-      try {
-        await browser.tabs.sendMessage(tab.id, {
-          type: "REFRESH_STATE",
-          payload: { reason: "service_ready" },
-          id: `bg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-          timestamp: Date.now(),
-        });
-      } catch {
-        // Content script may not be loaded on this tab - this is expected
-      }
-    }
-  }
-});

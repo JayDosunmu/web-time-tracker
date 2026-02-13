@@ -1,5 +1,5 @@
 /**
- * StorageManager - Pure generic CRUD abstraction for browser.storage.local
+ * PersistenceManager - Pure generic CRUD abstraction for browser.storage.local
  *
  * This class provides a thin wrapper around browser.storage with type-safe
  * generic operations. All domain-specific logic should be handled by
@@ -8,31 +8,31 @@
 
 type StorageArea = browser.storage.StorageArea;
 
-export class StorageManager {
-  private static instance: StorageManager | null = null;
+export class PersistenceManager {
+  private static instance: PersistenceManager | null = null;
   private storage: StorageArea;
 
   private constructor(storage: StorageArea) {
     this.storage = storage;
   }
 
-  public static getInstance(storage?: StorageArea): StorageManager {
-    if (!StorageManager.instance) {
+  public static getInstance(storage?: StorageArea): PersistenceManager {
+    if (!PersistenceManager.instance) {
       if (!storage) {
         throw new Error(
-          "StorageManager must be initialized with storage parameter on first call"
+          "PersistenceManager must be initialized with storage parameter on first call"
         );
       }
-      StorageManager.instance = new StorageManager(storage);
+      PersistenceManager.instance = new PersistenceManager(storage);
     }
-    return StorageManager.instance;
+    return PersistenceManager.instance;
   }
 
   /**
    * Reset singleton instance for testing
    */
   public static resetInstance(): void {
-    StorageManager.instance = null;
+    PersistenceManager.instance = null;
   }
 
   /**
@@ -50,7 +50,7 @@ export class StorageManager {
       const result = await this.storage.get(keys);
       return result as Record<string, T>;
     } catch (error) {
-      console.error("StorageManager.get error:", error);
+      console.error("PersistenceManager.get error:", error);
       throw new Error(`Failed to get storage data: ${error}`);
     }
   }
@@ -62,7 +62,7 @@ export class StorageManager {
     try {
       await this.storage.set(items);
     } catch (error) {
-      console.error("StorageManager.set error:", error);
+      console.error("PersistenceManager.set error:", error);
       throw new Error(`Failed to set storage data: ${error}`);
     }
   }
@@ -74,7 +74,7 @@ export class StorageManager {
     try {
       await this.storage.remove(keys);
     } catch (error) {
-      console.error("StorageManager.remove error:", error);
+      console.error("PersistenceManager.remove error:", error);
       throw new Error(`Failed to remove storage data: ${error}`);
     }
   }
@@ -86,7 +86,7 @@ export class StorageManager {
     try {
       await this.storage.clear();
     } catch (error) {
-      console.error("StorageManager.clear error:", error);
+      console.error("PersistenceManager.clear error:", error);
       throw new Error(`Failed to clear storage data: ${error}`);
     }
   }
@@ -99,7 +99,7 @@ export class StorageManager {
       const result = await this.storage.get(null);
       return result as Record<string, T>;
     } catch (error) {
-      console.error("StorageManager.getAll error:", error);
+      console.error("PersistenceManager.getAll error:", error);
       throw new Error(`Failed to get all storage data: ${error}`);
     }
   }

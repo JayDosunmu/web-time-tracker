@@ -1,14 +1,13 @@
 /**
  * HistoryRepository - Data access layer for History, Day, and Hour data
  *
- * Provides domain-specific operations while StorageManager remains
+ * Provides domain-specific operations while PersistenceManager remains
  * a pure generic storage abstraction.
  */
 
 import type { History, Day, HourData } from "../../../types";
 import { getDateKey, getMidnightTimestamp, DAY_STORAGE_PREFIX } from "../utils";
-
-type StorageArea = browser.storage.StorageArea;
+import type { PersistenceManager } from "../storage/PersistenceManager";
 
 // Storage keys for v2 schema
 const STORAGE_KEYS = {
@@ -18,13 +17,13 @@ const STORAGE_KEYS = {
 
 export class HistoryRepository {
   private static instance: HistoryRepository | null = null;
-  private storage: StorageArea;
+  private storage: PersistenceManager;
 
-  private constructor(storage: StorageArea) {
+  private constructor(storage: PersistenceManager) {
     this.storage = storage;
   }
 
-  public static getInstance(storage?: StorageArea): HistoryRepository {
+  public static getInstance(storage?: PersistenceManager): HistoryRepository {
     if (!HistoryRepository.instance) {
       if (!storage) {
         throw new Error(

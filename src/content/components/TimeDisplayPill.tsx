@@ -1,10 +1,15 @@
 /**
  * Time display pill component - always visible floating timer
  * Preact component rendered inside closed Shadow DOM
+ *
+ * Provides both a class-based API (TimeDisplayPill) for backward compatibility
+ * and a factory function (createTimeDisplayPill) for WXT integration.
  */
 
 import { render, type FunctionComponent } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
+import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { RiInformation2Line, RiInformation2Fill, RiEyeLine, RiEyeFill, RiDragMove2Line } from 'react-icons/ri';
 import type { ExtensionSettings, PillPosition } from '../../../types';
 import type { PositionChangeSource } from '../../../types/messages';
@@ -648,4 +653,168 @@ export class TimeDisplayPill {
       this.container,
     );
   }
+}
+
+// ---- WXT Factory Function API ----
+
+/**
+ * Public API interface for TimeDisplayPill instances
+ */
+export interface TimeDisplayPillApi {
+  setPositionChangeCallback: (callback: (position: PillPosition, source: PositionChangeSource) => void) => void;
+  setShowFullInfoChangeCallback: (callback: (showFullInfo: boolean) => void) => void;
+  setHiddenChangeCallback: (callback: (hidden: boolean) => void) => void;
+  onSessionUpdate: (state: SessionState | null) => void;
+  onSettingsChange: (settings: Partial<ExtensionSettings>) => void;
+  destroy: () => void;
+}
+
+/**
+ * Factory function to create a TimeDisplayPill using WXT's createShadowRootUi
+ *
+ * Benefits over class-based approach:
+ * - HMR support in development (instant UI updates)
+ * - Automatic cleanup on extension reload/invalidation
+ * - Consistent z-index management
+ */
+export async function createTimeDisplayPill(
+  ctx: ContentScriptContext,
+  initialPosition?: PillPosition,
+  initialShowFullInfo?: boolean,
+  initialHidden?: boolean
+): Promise<TimeDisplayPillApi> {
+  // State management
+  const state = {
+    sessionState: null as SessionState | null,
+    position: initialPosition ?? { x: 9999, y: 20 },
+    visible: true,
+    isConnecting: true,
+    showFullInfo: initialShowFullInfo ?? false,
+    hidden: initialHidden ?? false,
+  };
+
+  // Callbacks
+  let onPositionChangeCallback: ((pos: PillPosition, src: PositionChangeSource) => void) | null = null;
+  let onShowFullInfoChangeCallback: ((show: boolean) => void) | null = null;
+  let onHiddenChangeCallback: ((hidden: boolean) => void) | null = null;
+
+  // Animation state
+  let animationFrameId: number | null = null;
+  let renderFn: (() => void) | null = null;
+
+  // Create the Shadow Root UI
+  const ui = await createShadowRootUi(ctx, {
+    name: 'web-time-tracker-pill',
+    position: 'overlay',
+    css: pillStyles + '\n' + toggleIconButtonStyles,
+
+    onMount(container: HTMLElement) {
+      // Define render function
+      renderFn = () => {
+        render(
+          <Pill
+            sessionState={state.sessionState}
+            position={state.position}
+            visible={state.visible}
+            isConnecting={state.isConnecting}
+            showFullInfo={state.showFullInfo}
+            isHidden={state.hidden}
+            onPositionChange={(pos, src) => {
+              state.position = pos;
+              onPositionChangeCallback?.(pos, src);
+            }}
+            onShowFullInfoChange={(show) => {
+              state.showFullInfo = show;
+              renderFn?.();
+              onShowFullInfoChangeCallback?.(show);
+            }}
+            onHiddenChange={(hidden) => {
+              state.hidden = hidden;
+              renderFn?.();
+              onHiddenChangeCallback?.(hidden);
+            }}
+          />,
+          container
+        );
+      };
+
+      renderFn();
+      return { container, renderFn };
+    },
+
+    onRemove(mounted: { container: HTMLElement; renderFn: (() => void) | null } | undefined) {
+      // Cleanup animation
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+      if (mounted) {
+        render(null, mounted.container);
+      }
+    },
+  });
+
+  ui.mount();
+
+  // Animation helpers
+  const shouldAnimate = () =>
+    state.sessionState?.isActive && !state.sessionState?.isPaused && state.visible;
+
+  const startAnimation = () => {
+    if (animationFrameId !== null) return;
+    const animate = () => {
+      if (!state.sessionState) return;
+      renderFn?.();
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animationFrameId = requestAnimationFrame(animate);
+  };
+
+  const stopAnimation = () => {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+  };
+
+  // Return public API (matches existing TimeDisplayPill interface)
+  return {
+    setPositionChangeCallback: (cb) => {
+      onPositionChangeCallback = cb;
+    },
+    setShowFullInfoChangeCallback: (cb) => {
+      onShowFullInfoChangeCallback = cb;
+    },
+    setHiddenChangeCallback: (cb) => {
+      onHiddenChangeCallback = cb;
+    },
+
+    onSessionUpdate(sessionState: SessionState | null) {
+      const wasAnimating = shouldAnimate();
+      state.sessionState = sessionState;
+      state.isConnecting = false;
+
+      if (wasAnimating && !shouldAnimate()) stopAnimation();
+      else if (!wasAnimating && shouldAnimate()) startAnimation();
+
+      renderFn?.();
+    },
+
+    onSettingsChange(settings: Partial<ExtensionSettings>) {
+      const wasAnimating = shouldAnimate();
+      if (settings.pillPosition) state.position = settings.pillPosition;
+      if (typeof settings.pillVisibility === 'boolean') state.visible = settings.pillVisibility;
+      if (typeof settings.pillShowFullInfo === 'boolean') state.showFullInfo = settings.pillShowFullInfo;
+      if (typeof settings.pillHidden === 'boolean') state.hidden = settings.pillHidden;
+
+      if (wasAnimating && !shouldAnimate()) stopAnimation();
+      else if (!wasAnimating && shouldAnimate()) startAnimation();
+
+      renderFn?.();
+    },
+
+    destroy() {
+      ui.remove();
+    },
+  };
 }

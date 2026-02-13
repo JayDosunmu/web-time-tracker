@@ -1,1 +1,1 @@
-export { StorageManager } from "./StorageManager";
+export { PersistenceManager } from "./PersistenceManager";

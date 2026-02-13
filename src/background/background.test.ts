@@ -156,8 +156,9 @@ describe("BackgroundService", () => {
       expect(mockDataModelManager.initialize).toHaveBeenCalled();
     });
 
-    it("should register all browser event listeners on startup", async () => {
-      await backgroundService.initialize();
+    it("should register all browser event listeners when registerEventListeners is called", async () => {
+      // Event listeners should be registered separately (MV3 requirement)
+      backgroundService.registerEventListeners();
 
       // Verify tab event listeners are registered using Jest assertions
       expect(browser.tabs.onActivated.addListener).toHaveBeenCalled();
@@ -191,6 +192,8 @@ describe("BackgroundService", () => {
 
   describe("Tab Event Handling", () => {
     beforeEach(async () => {
+      // Register event listeners first (captures handlers)
+      backgroundService.registerEventListeners();
       await backgroundService.initialize();
     });
 
@@ -316,6 +319,7 @@ describe("BackgroundService", () => {
 
   describe("Window Focus Handling", () => {
     beforeEach(async () => {
+      backgroundService.registerEventListeners();
       await backgroundService.initialize();
     });
 
@@ -367,6 +371,7 @@ describe("BackgroundService", () => {
 
   describe("WebNavigation Event Handling", () => {
     beforeEach(async () => {
+      backgroundService.registerEventListeners();
       await backgroundService.initialize();
     });
 
@@ -472,6 +477,7 @@ describe("BackgroundService", () => {
 
   describe("Error Handling and Resilience", () => {
     beforeEach(async () => {
+      backgroundService.registerEventListeners();
       await backgroundService.initialize();
     });
 
