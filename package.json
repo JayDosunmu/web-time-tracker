@@ -76,6 +76,7 @@
       "html"
     ],
     "moduleNameMapper": {
+      "^@/(.*)\\.css\\?inline$": "<rootDir>/tests/css-inline-mock.js",
       "^@/(.*)$": "<rootDir>/src/$1",
       "^@types/(.*)$": "<rootDir>/types/$1",
       "^preact$": "<rootDir>/node_modules/preact/dist/preact.js",
