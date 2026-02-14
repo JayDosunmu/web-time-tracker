@@ -912,3 +912,50 @@ export async function createTimeDisplayPill(
     },
   };
 }
+
+// ---- Factory for ComponentRegistry ----
+
+import type { ComponentFactory } from "../lifecycle/types";
+
+/**
+ * Options for creating a TimeDisplayPill instance.
+ */
+export interface TimeDisplayPillOptions {
+  ctx?: ContentScriptContext | undefined;
+  position?: PillPosition | undefined;
+  showFullInfo?: boolean | undefined;
+  hidden?: boolean | undefined;
+}
+
+/**
+ * Factory for creating TimeDisplayPill instances via ComponentRegistry.
+ *
+ * The factory provides:
+ * - A selector to identify orphaned DOM elements from previous extension contexts
+ * - A create method that delegates to the appropriate implementation
+ */
+export const TimeDisplayPillFactory: ComponentFactory<
+  TimeDisplayPillApi,
+  TimeDisplayPillOptions
+> = {
+  selector:
+    '#web-time-tracker-pill, [data-wxt-shadow-root="web-time-tracker-pill"]',
+
+  async create(options: TimeDisplayPillOptions): Promise<TimeDisplayPillApi> {
+    if (options.ctx) {
+      // Use WXT factory function for HMR support and automatic cleanup
+      return createTimeDisplayPill(
+        options.ctx,
+        options.position,
+        options.showFullInfo,
+        options.hidden
+      );
+    }
+    // Fallback to class-based approach (for tests or non-WXT environments)
+    return new TimeDisplayPill(
+      options.position,
+      options.showFullInfo,
+      options.hidden
+    );
+  },
+};
