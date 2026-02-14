@@ -5,6 +5,7 @@
 
 import { PersistenceManager } from "@/shared";
 import { BackgroundService } from "../../background/background";
+import { BadgeService } from "../../background/services/BadgeService";
 import { DataModelManager } from "../../background/services/DataModelManager";
 import { TimeTracker } from "../../background/services/TimeTracker";
 import {
@@ -32,6 +33,12 @@ export default defineBackground(() => {
   // Initialize TimeTracker (synchronous)
   const timeTracker = TimeTracker.getInstance(dataModelManager);
 
+  // Initialize BadgeService (synchronous)
+  const badgeService = BadgeService.getInstance(
+    historyRepository,
+    dataModelManager,
+  );
+
   // Initialize BackgroundService (synchronous constructor)
   const backgroundService = BackgroundService.getInstance(
     dataModelManager,
@@ -44,13 +51,24 @@ export default defineBackground(() => {
   // before any async operations
   backgroundService.registerEventListeners();
 
-  // Register alarm handlers for boundary detection (MV3 replacement for setTimeout)
-  browser.alarms.onAlarm.addListener((alarm) => {
+  // Register alarm handlers for boundary detection and badge updates (MV3 replacement for setTimeout)
+  browser.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === "hour-boundary") {
-      dataModelManager.handleHourElapsed();
+      await dataModelManager.handleHourElapsed();
+      // Refresh badge after hour boundary to reflect recorded time
+      await badgeService.refreshBadge();
     } else if (alarm.name === "day-boundary") {
-      dataModelManager.handleDayElapsed();
+      await dataModelManager.handleDayElapsed();
+      // Refresh badge immediately after day reset
+      await badgeService.refreshBadge();
+    } else if (alarm.name === "badge-update") {
+      await badgeService.refreshBadge();
     }
+  });
+
+  // Create badge update alarm (fires every minute for real-time updates)
+  browser.alarms.create("badge-update", {
+    periodInMinutes: 1,
   });
 
   // Handle extension install/update events
@@ -79,7 +97,10 @@ export default defineBackground(() => {
   });
 
   // Async initialization (runs after event listeners are registered)
-  backgroundService.initialize().catch((error) => {
+  backgroundService.initialize().then(() => {
+    // Initial badge refresh after service is ready
+    badgeService.refreshBadge();
+  }).catch((error) => {
     console.error("Failed to initialize background service:", error);
   });
 
