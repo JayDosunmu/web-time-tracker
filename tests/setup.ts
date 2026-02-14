@@ -17,6 +17,13 @@ import chrome from 'sinon-chrome';
   clearTimeout(id);
 });
 
+// Mock ResizeObserver (not available in jsdom)
+(global as any).ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+}));
+
 // Set up common browser API defaults
 beforeEach(() => {
   // Silence console logs
