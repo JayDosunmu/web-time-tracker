@@ -12,7 +12,8 @@ import type {
   PositionChangeSource,
 } from "../../types";
 import { MessageRouter } from "./messaging/MessageRouter";
-import { TimeDisplayPill, createTimeDisplayPill, type TimeDisplayPillApi } from "./components/TimeDisplayPill";
+import { ComponentRegistry } from "./lifecycle/ComponentRegistry";
+import { TimeDisplayPillFactory } from "./components/TimeDisplayPill";
 import {
   SettingsRepository,
   TabRepository,
@@ -183,33 +184,26 @@ export class ContentScriptManager {
   }
 
   /**
-   * Initialize and register components
+   * Initialize and register components via ComponentRegistry.
+   * The registry handles orphan cleanup before creating new components.
    */
   private async initializeComponents(): Promise<void> {
     try {
       // Read settings directly from storage via repository
       const settings = await this.settingsRepository.getSettings();
+      const registry = ComponentRegistry.getInstance();
 
-      // Create TimeDisplayPill using WXT's createShadowRootUi if context is available
-      // Falls back to class-based approach for backward compatibility (tests)
-      let timeDisplayPill: TimeDisplayPillApi;
-
-      if (this.ctx) {
-        // Use WXT factory function for HMR support and automatic cleanup
-        timeDisplayPill = await createTimeDisplayPill(
-          this.ctx,
-          settings.pillPosition,
-          settings.pillShowFullInfo,
-          settings.pillHidden,
-        );
-      } else {
-        // Fallback to class-based approach (for tests or non-WXT environments)
-        timeDisplayPill = new TimeDisplayPill(
-          settings.pillPosition,
-          settings.pillShowFullInfo,
-          settings.pillHidden,
-        );
-      }
+      // Create TimeDisplayPill via registry (handles orphan cleanup automatically)
+      const timeDisplayPill = await registry.register(
+        "timeDisplayPill",
+        TimeDisplayPillFactory,
+        {
+          ctx: this.ctx ?? undefined,
+          position: settings.pillPosition,
+          showFullInfo: settings.pillShowFullInfo,
+          hidden: settings.pillHidden,
+        }
+      );
 
       // Wire up callbacks for persistence
       timeDisplayPill.setPositionChangeCallback(
@@ -222,6 +216,7 @@ export class ContentScriptManager {
         this.handleHiddenChange.bind(this),
       );
 
+      // Also track in local components map for broadcast support
       this.registerComponent("timeDisplayPill", timeDisplayPill);
 
       // Apply visibility setting
@@ -519,12 +514,8 @@ export class ContentScriptManager {
         this.visibilityHandler = null;
       }
 
-      // Destroy all registered components
-      for (const [_, component] of this.components.entries()) {
-        if (component && typeof component.destroy === "function") {
-          component.destroy();
-        }
-      }
+      // Destroy all components via registry (handles cleanup properly)
+      ComponentRegistry.getInstance().destroyAll();
       this.components.clear();
 
       // Destroy message router

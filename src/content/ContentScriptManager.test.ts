@@ -9,7 +9,8 @@
 import { testUtils } from "../../tests/utils";
 import { ContentScriptManager } from "./ContentScriptManager";
 import { MessageRouter } from "./messaging/MessageRouter";
-import { TimeDisplayPill } from "./components/TimeDisplayPill";
+import { TimeDisplayPill, TimeDisplayPillFactory } from "./components/TimeDisplayPill";
+import { ComponentRegistry } from "./lifecycle/ComponentRegistry";
 import { SettingsRepository, TabRepository, HistoryRepository } from "../shared/repositories";
 import type { RefreshStateMessage, HourTimesAggregate, Hours24Tuple } from "../../types";
 
@@ -108,6 +109,9 @@ describe("ContentScriptManager", () => {
     (TimeDisplayPill as jest.Mock).mockImplementation(
       () => mockTimeDisplayPill,
     );
+    // Mock the factory to use the mocked pill
+    (TimeDisplayPillFactory as jest.Mocked<typeof TimeDisplayPillFactory>).create = jest.fn().mockResolvedValue(mockTimeDisplayPill);
+    (TimeDisplayPillFactory as any).selector = '#web-time-tracker-pill';
     (SettingsRepository.getInstance as jest.Mock).mockReturnValue(
       mockSettingsRepository,
     );
@@ -122,6 +126,7 @@ describe("ContentScriptManager", () => {
     SettingsRepository.resetInstance();
     TabRepository.resetInstance();
     HistoryRepository.resetInstance();
+    ComponentRegistry.resetInstance();
     ContentScriptManager.resetInstance();
     contentManager = ContentScriptManager.getInstance();
   });
@@ -131,6 +136,7 @@ describe("ContentScriptManager", () => {
       contentManager.destroy();
     }
     ContentScriptManager.resetInstance();
+    ComponentRegistry.resetInstance();
     jest.restoreAllMocks();
   });
 
@@ -519,8 +525,14 @@ describe("ContentScriptManager", () => {
 
       await contentManager.initialize();
 
-      // Verify TimeDisplayPill was constructed with position, showFullInfo, and hidden from storage
-      expect(TimeDisplayPill).toHaveBeenCalledWith({ x: 300, y: 150 }, false, false);
+      // Verify TimeDisplayPillFactory.create was called with settings from storage
+      expect(TimeDisplayPillFactory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          position: { x: 300, y: 150 },
+          showFullInfo: false,
+          hidden: false,
+        })
+      );
     });
   });
 
@@ -558,7 +570,7 @@ describe("ContentScriptManager", () => {
   });
 
   describe("Hidden State Persistence", () => {
-    it("should pass initial pillHidden to TimeDisplayPill constructor", async () => {
+    it("should pass initial pillHidden to TimeDisplayPillFactory", async () => {
       const settingsWithHidden = {
         ...mockSettings,
         pillHidden: true,
@@ -567,11 +579,11 @@ describe("ContentScriptManager", () => {
 
       await contentManager.initialize();
 
-      // Verify TimeDisplayPill was constructed with pillHidden from storage
-      expect(TimeDisplayPill).toHaveBeenCalledWith(
-        expect.any(Object), // position
-        expect.any(Boolean), // showFullInfo
-        true // pillHidden
+      // Verify TimeDisplayPillFactory.create was called with pillHidden from storage
+      expect(TimeDisplayPillFactory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hidden: true,
+        })
       );
     });
 
