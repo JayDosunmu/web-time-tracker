@@ -11,7 +11,12 @@ import { ContentScriptManager } from "./ContentScriptManager";
 import { MessageRouter } from "./messaging/MessageRouter";
 import { TimeDisplayPill } from "./components/TimeDisplayPill";
 import { SettingsRepository, TabRepository, HistoryRepository } from "../shared/repositories";
-import type { RefreshStateMessage } from "../../types";
+import type { RefreshStateMessage, HourTimesAggregate, Hours24Tuple } from "../../types";
+
+// Helper to create empty hourTimes fixture for tests
+const createEmptyHourTimes = (): HourTimesAggregate => ({
+  hours: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as Hours24Tuple,
+});
 
 // Mock dependencies
 jest.mock("./messaging/MessageRouter");
@@ -365,6 +370,7 @@ describe("ContentScriptManager", () => {
         isActive: true,
         isPaused: false,
         startTime: 1000,
+        hourTimes: createEmptyHourTimes(),
       });
     });
 
@@ -538,6 +544,7 @@ describe("ContentScriptManager", () => {
         isActive: true,
         isPaused: false,
         startTime: 1000,
+        hourTimes: createEmptyHourTimes(),
       });
     });
 

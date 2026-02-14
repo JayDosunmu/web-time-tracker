@@ -24,14 +24,17 @@ export interface IntervalData {
 /**
  * Aggregate hourly data into 4-hour intervals
  */
-export function aggregate4HourIntervals(hourTimes: HourTimesAggregate): IntervalData[] {
+export function aggregate4HourIntervals(hourTimes: HourTimesAggregate | null | undefined): IntervalData[] {
   const intervals: IntervalData[] = [];
 
   for (let startHour = 0; startHour < 24; startHour += 4) {
     let totalTime = 0;
 
-    for (let h = startHour; h < startHour + 4; h++) {
-      totalTime += hourTimes.hours[h];
+    // Defensive: handle missing or malformed hourTimes
+    if (hourTimes?.hours) {
+      for (let h = startHour; h < startHour + 4; h++) {
+        totalTime += hourTimes.hours[h] ?? 0;
+      }
     }
 
     intervals.push({ startHour, totalTime });
@@ -68,8 +71,8 @@ export function getCurrentFractionalHour(now: Date): number {
  * Props for the TimelineChart component
  */
 export interface TimelineChartProps {
-  /** Pre-aggregated hour times (24-element tuple) */
-  hourTimes: HourTimesAggregate;
+  /** Pre-aggregated hour times (24-element tuple). Handles undefined gracefully. */
+  hourTimes?: HourTimesAggregate | null;
   /** Current Timestamp is a Datetime timestamp */
   currentDatetime?: Date;
   /** Override auto-calculated max time */

@@ -5,9 +5,12 @@ import type {
   Hours24Tuple,
 } from "../../../types";
 
-function aggregateHourTime(hourData: HourData): number {
+function aggregateHourTime(hourData: HourData | null | undefined): number {
+  if (!hourData?.domains) {
+    return 0;
+  }
   return Object.values(hourData.domains).reduce(
-    (sum, domain) => sum + domain.totalTime,
+    (sum, domain) => sum + (domain?.totalTime ?? 0),
     0
   );
 }
@@ -28,7 +31,9 @@ export function extractHourTimes(day: Day | null): HourTimesAggregate {
   const hours = createEmptyHourTimes().hours;
 
   for (let i = 0; i < 24; i++) {
-    hours[i] = day.hours[i]?.totalTime ?? aggregateHourTime(day.hours[i]);
+    const hourData = day.hours[i];
+    // Prefer pre-computed totalTime, fall back to aggregating from domains
+    hours[i] = hourData?.totalTime ?? aggregateHourTime(hourData);
   }
 
   return { hours };
