@@ -1,7 +1,16 @@
 import { type FunctionComponent } from "preact";
 import { useState, useEffect } from "preact/hooks";
-import type { ActiveTab, Day, History, ExtensionSettings } from "../../../types";
+import type {
+  ActiveTab,
+  Day,
+  History,
+  ExtensionSettings,
+} from "../../../types";
 import { getDateKey } from "../../shared/utils";
+import { extractHourTimes } from "../../shared/session";
+import {
+  TimelineChart,
+} from "../../shared/components";
 
 interface SessionData {
   domain: string;
@@ -66,6 +75,7 @@ export const App: FunctionComponent = () => {
   useEffect(() => {
     async function loadData(): Promise<void> {
       try {
+        const timestamp = Date.now();
         // Get current browser tab to determine domain
         const [browserTab] = await browser.tabs.query({
           active: true,
@@ -86,15 +96,15 @@ export const App: FunctionComponent = () => {
         let todayTotal = todayData?.totalTime ?? 0;
         // If active session exists, add elapsed time since last checkpoint
         if (activeTab?.active) {
-          todayTotal += Date.now() - activeTab.lastTimerCheck;
+          todayTotal += timestamp ? timestamp - activeTab.lastTimerCheck : 0;
         }
 
         // Get current session data if active and matches current tab
         let currentSession: SessionData | null = null;
         if (activeTab && currentDomain && activeTab.domain === currentDomain) {
           // Calculate display time: totalTime + elapsed if actively tracking
-          const elapsed = activeTab.active
-            ? Date.now() - activeTab.lastTimerCheck
+          const elapsed = activeTab.active && timestamp
+            ? timestamp - activeTab.lastTimerCheck
             : 0;
           const displayTime = activeTab.totalTime + elapsed;
 
@@ -117,7 +127,8 @@ export const App: FunctionComponent = () => {
             activeTab: activeTab,
             todayData: todayData,
             history: history,
-            settings: (data.settings as ExtensionSettings) ?? getDefaultSettings(),
+            settings:
+              (data.settings as ExtensionSettings) ?? getDefaultSettings(),
           },
         }));
       } catch (error) {
@@ -188,6 +199,16 @@ export const App: FunctionComponent = () => {
 
       <div class="divider" />
 
+      <section class="timeline-section">
+        <h2>Browsing Time, Today</h2>
+        <TimelineChart
+          hourTimes={extractHourTimes(state.storageData?.todayData ?? null)}
+          currentDatetime={new Date()}
+        />
+      </section>
+
+      <div class="divider" />
+
       <section class="debug-section">
         <button class="debug-toggle" onClick={toggleDebug}>
           {state.showDebug ? "Hide" : "Show"} Storage Data
@@ -197,9 +218,7 @@ export const App: FunctionComponent = () => {
           <div class="debug-data">
             <div class="debug-item">
               <h3>Active Tab</h3>
-              <pre>
-                {JSON.stringify(state.storageData.activeTab, null, 2)}
-              </pre>
+              <pre>{JSON.stringify(state.storageData.activeTab, null, 2)}</pre>
             </div>
 
             <div class="debug-item">

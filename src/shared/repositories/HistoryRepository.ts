@@ -208,6 +208,7 @@ export class HistoryRepository {
     // Initialize 24 hours with empty domain records
     const hours: HourData[] = Array.from({ length: 24 }, () => ({
       domains: {},
+      totalTime: 0,
     }));
 
     return {

@@ -5,6 +5,12 @@
 import { testUtils } from '../../../tests/utils';
 import { TimeDisplayPill } from './TimeDisplayPill';
 import type { SessionState } from './TimeDisplayPill';
+import type { HourTimesAggregate, Hours24Tuple } from '../../../types';
+
+// Helper to create empty hourTimes for tests
+const createEmptyHourTimes = (): HourTimesAggregate => ({
+  hours: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] as Hours24Tuple,
+});
 
 describe('TimeDisplayPill', () => {
   let timeDisplayPill: TimeDisplayPill;
@@ -48,7 +54,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: true,
         isPaused: false,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
 
       timeDisplayPill.onSessionUpdate(sessionState);
@@ -69,7 +76,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: true,
         isPaused: false,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
       timeDisplayPill.onSessionUpdate(activeState);
       jest.advanceTimersByTime(20);
@@ -82,7 +90,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: false,
         isPaused: true,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
       timeDisplayPill.onSessionUpdate(pausedState);
       jest.advanceTimersByTime(20);
@@ -101,7 +110,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: true,
         isPaused: false,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
 
       timeDisplayPill.onSessionUpdate(sessionState);
@@ -128,7 +138,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: true,
         isPaused: false,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
       timeDisplayPill.onSessionUpdate(activeState);
       jest.advanceTimersByTime(20);
@@ -141,7 +152,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: false,
         isPaused: true,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
       timeDisplayPill.onSessionUpdate(pausedState);
       jest.advanceTimersByTime(20);
@@ -195,7 +207,8 @@ describe('TimeDisplayPill', () => {
       visitCount: 3,
       isActive: true,
       isPaused: false,
-      startTime: Date.now() - 5000
+      startTime: Date.now() - 5000,
+      hourTimes: createEmptyHourTimes(),
     });
 
     // Note: Shadow DOM uses 'closed' mode, so we test behavior through observable effects
@@ -265,7 +278,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: true,
         isPaused: false,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
       timeDisplayPill.onSessionUpdate(sessionState);
       jest.advanceTimersByTime(20);
@@ -299,7 +313,8 @@ describe('TimeDisplayPill', () => {
         visitCount: 3,
         isActive: true,
         isPaused: false,
-        startTime: Date.now() - 5000
+        startTime: Date.now() - 5000,
+        hourTimes: createEmptyHourTimes(),
       };
       timeDisplayPill.onSessionUpdate(sessionState);
       jest.advanceTimersByTime(20);

@@ -105,6 +105,20 @@ section h2 {
   color: #334155;
 }
 
+/* Timeline chart section */
+.timeline-section {
+  text-align: center;
+}
+
+.timeline-section h2 {
+  text-align: left;
+}
+
+.timeline-chart {
+  margin-top: 8px;
+  padding-bottom: 8px;
+}
+
 .loading,
 .error {
   text-align: center;

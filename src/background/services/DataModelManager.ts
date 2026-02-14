@@ -366,12 +366,13 @@ export class DataModelManager {
 
     // Update hour data
     if (!today.hours[hour]) {
-      today.hours[hour] = { domains: {} };
+      today.hours[hour] = { domains: {}, totalTime: 0 };
     }
     if (!today.hours[hour].domains[domain]) {
       today.hours[hour].domains[domain] = { totalTime: 0, visitCount: 0 };
     }
     today.hours[hour].domains[domain].totalTime += elapsed;
+    today.hours[hour].totalTime = (today.hours[hour].totalTime ?? 0) + elapsed;
 
     // Update domain day data
     if (!today.domains[domain]) {

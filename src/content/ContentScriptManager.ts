@@ -20,6 +20,7 @@ import {
 } from "../shared/repositories";
 import { PersistenceManager } from "../shared/storage/PersistenceManager";
 import { getDateKey } from "../shared/utils";
+import { extractHourTimes } from "../shared/session";
 
 export class ContentScriptManager {
   private static instance: ContentScriptManager | null = null;
@@ -292,6 +293,7 @@ export class ContentScriptManager {
         const visitCount =
           todayData?.domains[this.currentDomain]?.visitCount ?? 0;
         const totalTimeToday = todayData?.totalTime ?? 0;
+        const hourTimes = extractHourTimes(todayData);
 
         sessionState = {
           domain: activeTab.domain,
@@ -301,6 +303,7 @@ export class ContentScriptManager {
           isActive: activeTab.active,
           isPaused: !activeTab.active,
           startTime: activeTab.lastTimerCheck,
+          hourTimes,
         };
       }
 

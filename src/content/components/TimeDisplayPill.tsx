@@ -6,19 +6,31 @@
  * and a factory function (createTimeDisplayPill) for WXT integration.
  */
 
-import { render, type FunctionComponent } from 'preact';
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
-import type { ContentScriptContext } from 'wxt/utils/content-script-context';
-import { RiInformation2Line, RiInformation2Fill, RiEyeOffLine, RiEyeOffFill, RiDragMove2Line } from 'react-icons/ri';
-import type { ExtensionSettings, PillPosition } from '../../../types';
-import type { PositionChangeSource } from '../../../types/messages';
-import { normalizeToReferencePhase } from '../../shared/utils';
-import { ToggleIconButton } from './ToggleIconButton';
-import { Tooltip } from './Tooltip';
-import pillStyles from './TimeDisplayPill.styles.css?inline';
-import toggleIconButtonStyles from './ToggleIconButton.css?inline';
-import tooltipStyles from './Tooltip.css?inline';
+import { render, type FunctionComponent } from "preact";
+import { useState, useEffect, useRef, useCallback } from "preact/hooks";
+import { createShadowRootUi } from "wxt/utils/content-script-ui/shadow-root";
+import type { ContentScriptContext } from "wxt/utils/content-script-context";
+import {
+  RiInformation2Line,
+  RiInformation2Fill,
+  RiEyeOffLine,
+  RiEyeOffFill,
+  RiDragMove2Line,
+} from "react-icons/ri";
+import type {
+  ExtensionSettings,
+  PillPosition,
+  HourTimesAggregate,
+} from "../../../types";
+import type { PositionChangeSource } from "../../../types/messages";
+import { normalizeToReferencePhase } from "../../shared/utils";
+import { ToggleIconButton } from "./ToggleIconButton";
+import { Tooltip } from "./Tooltip";
+import pillStyles from "./TimeDisplayPill.styles.css?inline";
+import toggleIconButtonStyles from "./ToggleIconButton.css?inline";
+import tooltipStyles from "./Tooltip.css?inline";
+import timelineChartStyles from "@/shared/components/TimelineChart.css?inline";
+import { TimelineChart } from "@/shared/components";
 
 export type { PillPosition };
 
@@ -30,6 +42,7 @@ export interface SessionState {
   isActive: boolean;
   isPaused: boolean;
   startTime: number;
+  hourTimes: HourTimesAggregate;
 }
 
 /**
@@ -41,17 +54,16 @@ function formatTime(milliseconds: number): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
 
 /**
  * Format current time as HH:MM:SS
  */
 function formatClockTime(date: Date): string {
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const seconds = date.getSeconds().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const seconds = date.getSeconds().toString().padStart(2, "0");
   return `${hours}:${minutes}:${seconds}`;
 }
 
@@ -62,7 +74,7 @@ function clampPosition(
   x: number,
   y: number,
   pillWidth: number,
-  pillHeight: number
+  pillHeight: number,
 ): PillPosition {
   const maxX = window.innerWidth - pillWidth;
   const maxY = window.innerHeight - pillHeight;
@@ -81,7 +93,10 @@ interface PillProps {
   isConnecting: boolean;
   showFullInfo: boolean;
   isHidden: boolean;
-  onPositionChange: (position: PillPosition, source: PositionChangeSource) => void;
+  onPositionChange: (
+    position: PillPosition,
+    source: PositionChangeSource,
+  ) => void;
   onShowFullInfoChange: (showFullInfo: boolean) => void;
   onHiddenChange: (hidden: boolean) => void;
 }
@@ -98,42 +113,46 @@ export const Pill: FunctionComponent<PillProps> = ({
   onHiddenChange,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [clampedPosition, setClampedPosition] = useState<PillPosition>(position);
+  const [clampedPosition, setClampedPosition] =
+    useState<PillPosition>(position);
   const [isInfoIconHovered, setIsInfoIconHovered] = useState(false);
   const [isVisibilityIconHovered, setIsVisibilityIconHovered] = useState(false);
   const [visibilityWasToggled, setVisibilityWasToggled] = useState(false);
   const [isCardHovered, setIsCardHovered] = useState(false);
 
   // Derived: show full info when toggled ON or hovering (but not during drag)
-  const showFullInfo = (isFullMode || isInfoIconHovered);
+  const showFullInfo = isFullMode || isInfoIconHovered;
   // Derived: hide card when toggled ON or hovering and toggled OFF. If hide was toggled after hovering, use visibilityWasToggled to invert this functionality. visibilityWasToggled will reset to false onExit from the icon.
-  const hideCard = ((isHidden !== isVisibilityIconHovered) !== visibilityWasToggled);
+  const hideCard =
+    (isHidden !== isVisibilityIconHovered) !== visibilityWasToggled;
 
   const pillRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
+  const dragStartRef = useRef<{ offsetX: number; offsetY: number } | null>(
+    null,
+  );
   const boundsRef = useRef({ maxX: 0, maxY: 0 });
   const prevPositionRef = useRef<PillPosition>(position);
 
   const isActive = sessionState?.isActive ?? false;
   const isPaused = sessionState?.isPaused ?? false;
   const visitCount = sessionState?.visitCount ?? 0;
-  const domain = sessionState?.domain ?? '';
+  const domain = sessionState?.domain ?? "";
 
   // Calculate elapsed once for synchronized display of all times
   const now = Date.now();
   const startTime = sessionState?.startTime ?? now;
-  const elapsed = (isActive && !isPaused) ? now - startTime : 0;
+  const elapsed = isActive && !isPaused ? now - startTime : 0;
 
   // Normalize base times to have same sub-second phase as startTime
   // This ensures all displayed times tick to the next second simultaneously
   const normalizedCurrentTime = normalizeToReferencePhase(
     startTime,
-    sessionState?.baseCurrentTime ?? 0
+    sessionState?.baseCurrentTime ?? 0,
   );
   const normalizedTotalTime = normalizeToReferencePhase(
     startTime,
-    sessionState?.baseTotalTimeToday ?? 0
+    sessionState?.baseTotalTimeToday ?? 0,
   );
 
   const displayTime = normalizedCurrentTime + elapsed;
@@ -149,7 +168,7 @@ export const Pill: FunctionComponent<PillProps> = ({
       maxY: window.innerHeight - rect.height,
     };
     // Clamp current position to new bounds
-    setClampedPosition(prev => ({
+    setClampedPosition((prev) => ({
       x: Math.max(0, Math.min(prev.x, boundsRef.current.maxX)),
       y: Math.max(0, Math.min(prev.y, boundsRef.current.maxY)),
     }));
@@ -166,13 +185,15 @@ export const Pill: FunctionComponent<PillProps> = ({
           maxY: window.innerHeight - rect.height,
         };
         // Clamp initial position to viewport
-        setClampedPosition(clampPosition(position.x, position.y, rect.width, rect.height));
+        setClampedPosition(
+          clampPosition(position.x, position.y, rect.width, rect.height),
+        );
       }
     }
 
-    window.addEventListener('resize', updateBoundsAndPosition);
+    window.addEventListener("resize", updateBoundsAndPosition);
     return () => {
-      window.removeEventListener('resize', updateBoundsAndPosition);
+      window.removeEventListener("resize", updateBoundsAndPosition);
     };
   }, [updateBoundsAndPosition, position.x, position.y]);
 
@@ -180,7 +201,7 @@ export const Pill: FunctionComponent<PillProps> = ({
   // This ensures position is applied even when pill was hidden during the update
   useEffect(() => {
     prevPositionRef.current = position;
-    setClampedPosition(prev => {
+    setClampedPosition((prev) => {
       // Only update if position actually changed (avoid unnecessary re-renders during drag)
       if (prev.x !== position.x || prev.y !== position.y) {
         return position;
@@ -195,18 +216,17 @@ export const Pill: FunctionComponent<PillProps> = ({
     const handleMouseMove = (event: globalThis.MouseEvent): void => {
       if (!cardRef.current) return;
       const rect = cardRef.current.getBoundingClientRect();
-      const isOver = (
+      const isOver =
         event.clientX >= rect.left &&
         event.clientX <= rect.right &&
         event.clientY >= rect.top &&
-        event.clientY <= rect.bottom
-      );
+        event.clientY <= rect.bottom;
       setIsCardHovered(isOver);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener("mousemove", handleMouseMove);
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener("mousemove", handleMouseMove);
     };
   }, []);
 
@@ -256,15 +276,14 @@ export const Pill: FunctionComponent<PillProps> = ({
       dragStartRef.current = null;
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, onPositionChange]);
-
 
   // Hide pill completely if not visible
   if (!visible) {
@@ -278,8 +297,16 @@ export const Pill: FunctionComponent<PillProps> = ({
 
   // Show connecting state while waiting for background service
   if (isConnecting && !sessionState) {
-    const connectingPillClass = ['pill-card', 'connecting', isDragging ? 'dragging' : ''].filter(Boolean).join(' ');
-    const connectingWrapperClass = ['pill-wrapper', isHidden ? 'hidden' : ''].filter(Boolean).join(' ');
+    const connectingPillClass = [
+      "pill-card",
+      "connecting",
+      isDragging ? "dragging" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const connectingWrapperClass = ["pill-wrapper", isHidden ? "hidden" : ""]
+      .filter(Boolean)
+      .join(" ");
     return (
       <div ref={pillRef} class={connectingWrapperClass} style={positionStyle}>
         {/* Icons Container */}
@@ -307,7 +334,10 @@ export const Pill: FunctionComponent<PillProps> = ({
             />
           </Tooltip>
           {/* Visibility Toggle Button */}
-          <Tooltip content={isHidden ? "Show timer" : "Hide timer"} className="visibility-tooltip">
+          <Tooltip
+            content={isHidden ? "Show timer" : "Hide timer"}
+            className="visibility-tooltip"
+          >
             <ToggleIconButton
               isActive={isHidden}
               onToggle={() => onHiddenChange(!isHidden)}
@@ -353,15 +383,19 @@ export const Pill: FunctionComponent<PillProps> = ({
   }
 
   const pillClass = [
-    'pill-card',
-    !isActive ? 'inactive' : '',
-    isPaused ? 'paused' : '',
-    isDragging ? 'dragging' : '',
-    !showFullInfo ? 'minimal' : '',
-    isCardHovered ? 'hovered' : '',
-  ].filter(Boolean).join(' ');
+    "pill-card",
+    !isActive ? "inactive" : "",
+    isPaused ? "paused" : "",
+    isDragging ? "dragging" : "",
+    !showFullInfo ? "minimal" : "",
+    isCardHovered ? "hovered" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-  const wrapperClass = ['pill-wrapper', hideCard ? 'hidden' : ''].filter(Boolean).join(' ');
+  const wrapperClass = ["pill-wrapper", hideCard ? "hidden" : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div ref={pillRef} class={wrapperClass} style={positionStyle}>
@@ -381,7 +415,8 @@ export const Pill: FunctionComponent<PillProps> = ({
         <Tooltip
           content={
             <>
-              {(isFullMode ? "Shows more" : "Shows less") + " — press to toggle"}
+              {(isFullMode ? "Shows more" : "Shows less") +
+                " — press to toggle"}
               <br />
               <br />
               Stays open while hovered over
@@ -450,8 +485,13 @@ export const Pill: FunctionComponent<PillProps> = ({
             </div>
           </div>
         </div>
-        {/* Row 3: Clock in grey pill */}
+        {/* Row 3: Chart + Clock stacked */}
         <div class="pill-footer">
+          <div class="timeline-chart">
+            <TimelineChart
+              hourTimes={sessionState.hourTimes}
+            />
+          </div>
           <span class="clock-pill">
             <span class="clock-label">Clock:</span>
             <span class="clock">{clockTime}</span>
@@ -476,12 +516,20 @@ export class TimeDisplayPill {
     showFullInfo: boolean;
     hidden: boolean;
   };
-  private onPositionChangeCallback: ((position: PillPosition, source: PositionChangeSource) => void) | null = null;
-  private onShowFullInfoChangeCallback: ((showFullInfo: boolean) => void) | null = null;
+  private onPositionChangeCallback:
+    | ((position: PillPosition, source: PositionChangeSource) => void)
+    | null = null;
+  private onShowFullInfoChangeCallback:
+    | ((showFullInfo: boolean) => void)
+    | null = null;
   private onHiddenChangeCallback: ((hidden: boolean) => void) | null = null;
   private animationFrameId: number | null = null;
 
-  constructor(initialPosition?: PillPosition, initialShowFullInfo?: boolean, initialHidden?: boolean) {
+  constructor(
+    initialPosition?: PillPosition,
+    initialShowFullInfo?: boolean,
+    initialHidden?: boolean,
+  ) {
     this.state = {
       sessionState: null,
       // Use provided position or default to top-right (will be clamped to actual viewport)
@@ -497,14 +545,18 @@ export class TimeDisplayPill {
   /**
    * Set callback for position changes (for persistence)
    */
-  public setPositionChangeCallback(callback: (position: PillPosition, source: PositionChangeSource) => void): void {
+  public setPositionChangeCallback(
+    callback: (position: PillPosition, source: PositionChangeSource) => void,
+  ): void {
     this.onPositionChangeCallback = callback;
   }
 
   /**
    * Set callback for showFullInfo changes (for persistence)
    */
-  public setShowFullInfoChangeCallback(callback: (showFullInfo: boolean) => void): void {
+  public setShowFullInfoChangeCallback(
+    callback: (showFullInfo: boolean) => void,
+  ): void {
     this.onShowFullInfoChangeCallback = callback;
   }
 
@@ -534,13 +586,13 @@ export class TimeDisplayPill {
     if (settings.pillPosition) {
       this.state.position = settings.pillPosition;
     }
-    if (typeof settings.pillVisibility === 'boolean') {
+    if (typeof settings.pillVisibility === "boolean") {
       this.state.visible = settings.pillVisibility;
     }
-    if (typeof settings.pillShowFullInfo === 'boolean') {
+    if (typeof settings.pillShowFullInfo === "boolean") {
       this.state.showFullInfo = settings.pillShowFullInfo;
     }
-    if (typeof settings.pillHidden === 'boolean') {
+    if (typeof settings.pillHidden === "boolean") {
       this.state.hidden = settings.pillHidden;
     }
     this.updateAnimation(wasAnimating);
@@ -610,7 +662,10 @@ export class TimeDisplayPill {
     }
   }
 
-  private handlePositionChange = (position: PillPosition, source: PositionChangeSource): void => {
+  private handlePositionChange = (
+    position: PillPosition,
+    source: PositionChangeSource,
+  ): void => {
     this.state.position = position;
     if (this.onPositionChangeCallback) {
       this.onPositionChangeCallback(position, source);
@@ -635,24 +690,25 @@ export class TimeDisplayPill {
 
   private mount(): void {
     // Remove any existing pill (handles extension reload, HMR, re-injection)
-    const existing = document.getElementById('web-time-tracker-pill');
+    const existing = document.getElementById("web-time-tracker-pill");
     if (existing?.parentNode) {
       existing.parentNode.removeChild(existing);
     }
 
-    this.element = document.createElement('div');
-    this.element.id = 'web-time-tracker-pill';
-    this.shadowRoot = this.element.attachShadow({ mode: 'closed' });
+    this.element = document.createElement("div");
+    this.element.id = "web-time-tracker-pill";
+    this.shadowRoot = this.element.attachShadow({ mode: "closed" });
 
     if (!this.shadowRoot) return;
 
     // Inject styles into shadow root
-    const style = document.createElement('style');
-    style.textContent = pillStyles + '\n' + toggleIconButtonStyles + '\n' + tooltipStyles;
+    const style = document.createElement("style");
+    style.textContent =
+      pillStyles + "\n" + toggleIconButtonStyles + "\n" + tooltipStyles + "\n" + timelineChartStyles;
     this.shadowRoot.appendChild(style);
 
     // Create render container for Preact
-    this.container = document.createElement('div');
+    this.container = document.createElement("div");
     this.shadowRoot.appendChild(this.container);
 
     document.body.appendChild(this.element);
@@ -684,8 +740,12 @@ export class TimeDisplayPill {
  * Public API interface for TimeDisplayPill instances
  */
 export interface TimeDisplayPillApi {
-  setPositionChangeCallback: (callback: (position: PillPosition, source: PositionChangeSource) => void) => void;
-  setShowFullInfoChangeCallback: (callback: (showFullInfo: boolean) => void) => void;
+  setPositionChangeCallback: (
+    callback: (position: PillPosition, source: PositionChangeSource) => void,
+  ) => void;
+  setShowFullInfoChangeCallback: (
+    callback: (showFullInfo: boolean) => void,
+  ) => void;
   setHiddenChangeCallback: (callback: (hidden: boolean) => void) => void;
   onSessionUpdate: (state: SessionState | null) => void;
   onSettingsChange: (settings: Partial<ExtensionSettings>) => void;
@@ -704,7 +764,7 @@ export async function createTimeDisplayPill(
   ctx: ContentScriptContext,
   initialPosition?: PillPosition,
   initialShowFullInfo?: boolean,
-  initialHidden?: boolean
+  initialHidden?: boolean,
 ): Promise<TimeDisplayPillApi> {
   // State management
   const state = {
@@ -717,7 +777,9 @@ export async function createTimeDisplayPill(
   };
 
   // Callbacks
-  let onPositionChangeCallback: ((pos: PillPosition, src: PositionChangeSource) => void) | null = null;
+  let onPositionChangeCallback:
+    | ((pos: PillPosition, src: PositionChangeSource) => void)
+    | null = null;
   let onShowFullInfoChangeCallback: ((show: boolean) => void) | null = null;
   let onHiddenChangeCallback: ((hidden: boolean) => void) | null = null;
 
@@ -727,9 +789,9 @@ export async function createTimeDisplayPill(
 
   // Create the Shadow Root UI
   const ui = await createShadowRootUi(ctx, {
-    name: 'web-time-tracker-pill',
-    position: 'overlay',
-    css: pillStyles + '\n' + toggleIconButtonStyles + '\n' + tooltipStyles,
+    name: "web-time-tracker-pill",
+    position: "overlay",
+    css: pillStyles + "\n" + toggleIconButtonStyles + "\n" + tooltipStyles + "\n" + timelineChartStyles,
 
     onMount(container: HTMLElement) {
       // Define render function
@@ -757,7 +819,7 @@ export async function createTimeDisplayPill(
               onHiddenChangeCallback?.(hidden);
             }}
           />,
-          container
+          container,
         );
       };
 
@@ -765,7 +827,11 @@ export async function createTimeDisplayPill(
       return { container, renderFn };
     },
 
-    onRemove(mounted: { container: HTMLElement; renderFn: (() => void) | null } | undefined) {
+    onRemove(
+      mounted:
+        | { container: HTMLElement; renderFn: (() => void) | null }
+        | undefined,
+    ) {
       // Cleanup animation
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -781,7 +847,9 @@ export async function createTimeDisplayPill(
 
   // Animation helpers
   const shouldAnimate = () =>
-    state.sessionState?.isActive && !state.sessionState?.isPaused && state.visible;
+    state.sessionState?.isActive &&
+    !state.sessionState?.isPaused &&
+    state.visible;
 
   const startAnimation = () => {
     if (animationFrameId !== null) return;
@@ -826,9 +894,12 @@ export async function createTimeDisplayPill(
     onSettingsChange(settings: Partial<ExtensionSettings>) {
       const wasAnimating = shouldAnimate();
       if (settings.pillPosition) state.position = settings.pillPosition;
-      if (typeof settings.pillVisibility === 'boolean') state.visible = settings.pillVisibility;
-      if (typeof settings.pillShowFullInfo === 'boolean') state.showFullInfo = settings.pillShowFullInfo;
-      if (typeof settings.pillHidden === 'boolean') state.hidden = settings.pillHidden;
+      if (typeof settings.pillVisibility === "boolean")
+        state.visible = settings.pillVisibility;
+      if (typeof settings.pillShowFullInfo === "boolean")
+        state.showFullInfo = settings.pillShowFullInfo;
+      if (typeof settings.pillHidden === "boolean")
+        state.hidden = settings.pillHidden;
 
       if (wasAnimating && !shouldAnimate()) stopAnimation();
       else if (!wasAnimating && shouldAnimate()) startAnimation();

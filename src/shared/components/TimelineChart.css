@@ -1,0 +1,7 @@
+/* TimelineChart container styles */
+.timeline-chart {
+  width: 100%;
+  position: relative;
+  min-height: 60px;
+  max-height: 120px;
+}

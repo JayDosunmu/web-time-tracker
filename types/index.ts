@@ -108,6 +108,24 @@ export interface HourDomainData {
  */
 export interface HourData {
   domains: Record<string, HourDomainData>;
+  totalTime: number; // Aggregated total time for this hour (ms)
+}
+
+/**
+ * Fixed-length tuple representing 24 hours of aggregated time (ms)
+ */
+export type Hours24Tuple = [
+  number, number, number, number, number, number,
+  number, number, number, number, number, number,
+  number, number, number, number, number, number,
+  number, number, number, number, number, number
+];
+
+/**
+ * Aggregated hour times for chart display
+ */
+export interface HourTimesAggregate {
+  hours: Hours24Tuple;
 }
 
 /**

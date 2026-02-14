@@ -80,6 +80,10 @@ For deeper architectural understanding, see the docs folder:
 | [Data Flow](docs/architecture-dataflow.md) | How data moves through the system, storage schema, and message flows |
 | [Sequence Diagrams](docs/architecture-sequences.md) | Step-by-step sequences for tab load/unload, focus changes, and SPA navigation |
 
+### Architecture Decision Records
+
+Key architectural decisions are documented in the [docs/adr/](docs/adr/) directory. These records capture the context, decision, and consequences for significant technical choices made in this project.
+
 ## Prerequisites
 
 | Requirement | Version |
