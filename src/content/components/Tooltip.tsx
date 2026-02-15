@@ -23,7 +23,7 @@ interface TooltipProps {
 
 export const Tooltip: FunctionComponent<TooltipProps> = ({
   content,
-  placement: preferredPlacement = 'bottom',
+  placement: preferredPlacement = 'top',
   delay = 150,
   children,
   className = '',
