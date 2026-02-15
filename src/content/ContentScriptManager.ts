@@ -291,17 +291,14 @@ export class ContentScriptManager {
         const totalTimeToday = todayData?.totalTime ?? 0;
         const hourTimes = extractHourTimes(todayData);
 
-        // Build top 5 domain stats for the domain list
+        // Build domain stats for the domain list (sorting/truncation handled by DomainList component)
         const domainStats: DomainListItem[] = todayData?.domains
-          ? Object.entries(todayData.domains)
-              .map(([domain, data]) => ({
-                domain,
-                visitCount: data.visitCount,
-                activeTime: data.totalTime,
-                isActive: domain === activeTab.domain && activeTab.active,
-              }))
-              .sort((a, b) => b.activeTime - a.activeTime)
-              .slice(0, 5)
+          ? Object.entries(todayData.domains).map(([domain, data]) => ({
+              domain,
+              visitCount: data.visitCount,
+              activeTime: data.totalTime,
+              isActive: domain === activeTab.domain && activeTab.active,
+            }))
           : [];
 
         sessionState = {
