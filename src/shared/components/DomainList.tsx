@@ -1,6 +1,6 @@
 import { useRef, useLayoutEffect, useMemo } from "preact/hooks";
 import type { FunctionComponent } from "preact";
-import { getDomainColor } from "../utils/domainColor";
+import { DomainListItemCard } from "./DomainListItemCard";
 import "./DomainList.css";
 
 /**
@@ -10,17 +10,7 @@ export interface DomainListItem {
   domain: string;
   visitCount: number;
   activeTime: number; // milliseconds
-}
-
-/**
- * Format milliseconds to HH:MM:SS display string
- */
-function formatTime(milliseconds: number): string {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  isActive?: boolean; // Whether this domain is currently active
 }
 
 /**
@@ -120,15 +110,12 @@ export const DomainList: FunctionComponent<DomainListProps> = ({
 
         return (
           <div key={item.domain} class={rowClass} data-domain={item.domain}>
-            <span
-              class="domain-dot"
-              style={{ backgroundColor: getDomainColor(item.domain) }}
+            <DomainListItemCard
+              domain={item.domain}
+              visitCount={item.visitCount}
+              activeTime={item.activeTime}
+              isActive={item.isActive ?? false}
             />
-            <span class="domain-name" title={item.domain}>
-              {item.domain}
-            </span>
-            <span class="domain-visits">({item.visitCount})</span>
-            <span class="domain-time">{formatTime(item.activeTime)}</span>
           </div>
         );
       })}

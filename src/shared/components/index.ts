@@ -12,4 +12,9 @@ export {
   type DomainListItem,
 } from "./DomainList";
 
+export {
+  DomainListItemCard,
+  type DomainListItemCardProps,
+} from "./DomainListItemCard";
+
 export { getDomainColor } from "../utils/domainColor";

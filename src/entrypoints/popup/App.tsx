@@ -162,9 +162,11 @@ export const App: FunctionComponent = () => {
     const now = Date.now();
 
     return Object.entries(domains).map(([domain, data]) => {
+      const isActiveDomain = !!(activeTab?.active && activeTab.domain === domain);
+
       // Add elapsed time for the currently active domain
       let activeTime = data.totalTime;
-      if (activeTab?.active && activeTab.domain === domain) {
+      if (isActiveDomain) {
         activeTime += now - activeTab.lastTimerCheck;
       }
 
@@ -172,6 +174,7 @@ export const App: FunctionComponent = () => {
         domain,
         visitCount: data.visitCount,
         activeTime,
+        isActive: isActiveDomain,
       };
     });
   })();
@@ -240,7 +243,7 @@ export const App: FunctionComponent = () => {
           <DomainList
             items={domainItems}
             sortBy={(a, b) => b.activeTime - a.activeTime}
-            maxRows={5}
+            maxRows={10}
           />
         ) : (
           <div class="no-domains">No sites tracked yet</div>
