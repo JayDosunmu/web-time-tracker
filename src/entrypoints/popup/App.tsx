@@ -10,6 +10,8 @@ import { getDateKey } from "../../shared/utils";
 import { extractHourTimes } from "../../shared/session";
 import {
   TimelineChart,
+  DomainList,
+  type DomainListItem,
 } from "../../shared/components";
 
 interface SessionData {
@@ -151,6 +153,29 @@ export const App: FunctionComponent = () => {
     setState((prev) => ({ ...prev, showDebug: !prev.showDebug }));
   };
 
+  // Derive domain items for the DomainList
+  const domainItems: DomainListItem[] = (() => {
+    const domains = state.storageData?.todayData?.domains;
+    if (!domains) return [];
+
+    const activeTab = state.storageData?.activeTab;
+    const now = Date.now();
+
+    return Object.entries(domains).map(([domain, data]) => {
+      // Add elapsed time for the currently active domain
+      let activeTime = data.totalTime;
+      if (activeTab?.active && activeTab.domain === domain) {
+        activeTime += now - activeTab.lastTimerCheck;
+      }
+
+      return {
+        domain,
+        visitCount: data.visitCount,
+        activeTime,
+      };
+    });
+  })();
+
   if (state.loading) {
     return (
       <div class="popup-container">
@@ -205,6 +230,21 @@ export const App: FunctionComponent = () => {
           hourTimes={extractHourTimes(state.storageData?.todayData ?? null)}
           currentDatetime={new Date()}
         />
+      </section>
+
+      <div class="divider" />
+
+      <section class="domains-section">
+        <h2>Most Active Sites</h2>
+        {domainItems.length > 0 ? (
+          <DomainList
+            items={domainItems}
+            sortBy={(a, b) => b.activeTime - a.activeTime}
+            maxRows={5}
+          />
+        ) : (
+          <div class="no-domains">No sites tracked yet</div>
+        )}
       </section>
 
       <div class="divider" />
