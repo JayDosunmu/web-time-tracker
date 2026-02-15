@@ -1,0 +1,98 @@
+.domain-list {
+  --row-height: 24px;
+  --dot-size: 8px;
+  --domain-min-width: 60px;
+  --time-width: 64px;
+  --gap: 8px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.domain-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  height: var(--row-height);
+  min-height: var(--row-height);
+  will-change: transform;
+}
+
+.domain-row.animating {
+  transition: transform 200ms ease-out;
+}
+
+.domain-row.entering {
+  animation: slideIn 200ms ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Colored dot indicator */
+.domain-dot {
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Domain name with ellipsis overflow */
+.domain-name {
+  flex: 1 1 auto;
+  min-width: var(--domain-min-width);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-secondary, #5f6c81);
+}
+
+/* Visit count - shrinks and hides when space is tight */
+.domain-visits {
+  flex-shrink: 1;
+  flex-grow: 0;
+  font-size: 11px;
+  color: var(--color-muted, #7d8fa8);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Hide visits when container is narrow */
+@container (max-width: 180px) {
+  .domain-visits {
+    display: none;
+  }
+}
+
+/* Time display - fixed width for alignment */
+.domain-time {
+  flex-shrink: 0;
+  width: var(--time-width);
+  text-align: right;
+  font-family: var(--font-mono, "SF Mono", Monaco, "Lucida Console", Consolas, monospace);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary, #1a1a2e);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .domain-row,
+  .domain-row.animating,
+  .domain-row.entering {
+    animation: none;
+    transition: none;
+  }
+}
