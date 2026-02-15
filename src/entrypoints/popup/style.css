@@ -138,6 +138,11 @@ section h2 {
   --font-mono: 'SF Mono', Monaco, Consolas, monospace;
 }
 
+.domains-section .domain-list {
+  max-height: 124px; /* ~5 cards at 20px + 4px gaps */
+  overflow-y: auto;
+}
+
 .no-domains {
   padding: 16px;
   text-align: center;
