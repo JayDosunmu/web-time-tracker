@@ -162,6 +162,13 @@ export const Pill: FunctionComponent<PillProps> = ({
   const totalTimeToday = normalizedTotalTime + elapsed;
   const clockTime = formatClockTime(new Date(now));
 
+  // Compute live domain stats with elapsed time added to active domain
+  const liveDomainStats = (sessionState?.domainStats ?? []).map((stat) =>
+    stat.domain === domain && stat.isActive
+      ? { ...stat, activeTime: stat.activeTime + elapsed }
+      : stat
+  );
+
   // Update cached bounds and clamp position on window resize (local only, not persisted)
   const updateBoundsAndPosition = useCallback(() => {
     if (!pillRef.current) return;
@@ -501,13 +508,14 @@ export const Pill: FunctionComponent<PillProps> = ({
           </span>
         </div>
         {/* Domain list - only in expanded mode */}
-        {showFullInfo && sessionState.domainStats.length > 0 && (
+        {showFullInfo && liveDomainStats.length > 0 && (
           <div class="pill-domains">
             <h3 class="pill-domains__header">Most Active Sites</h3>
             <DomainList
-              items={sessionState.domainStats}
+              items={liveDomainStats}
               sortBy={(a, b) => b.activeTime - a.activeTime}
               maxRows={5}
+              isLive={true}
             />
           </div>
         )}
