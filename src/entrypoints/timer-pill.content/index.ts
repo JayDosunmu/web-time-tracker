@@ -6,6 +6,9 @@
 import '../../content/styles/content.css';
 import { ContentScriptManager } from '../../content/ContentScriptManager';
 
+// Generate unique instance ID for this content script load
+const CONTENT_SCRIPT_INSTANCE_ID = `cs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
@@ -18,27 +21,31 @@ export default defineContentScript({
       return;
     }
 
-    console.log('Initializing Web Time Tracker content script...');
+    console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] 🚀 Content script STARTING - URL: ${window.location.href}`);
 
     // Get manager instance and pass context for createShadowRootUi
     const contentManager = ContentScriptManager.getInstance();
+    console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] 📦 ContentScriptManager instance obtained`);
 
     // Set the WXT context for Shadow DOM UI creation
     contentManager.setContext(ctx);
+    console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] 🔗 WXT context set on manager`);
 
     // Initialize manager
     await contentManager.initialize();
+    console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] ✅ ContentScriptManager initialized`);
 
     // Set up URL change detection for single-page applications
     setupUrlChangeDetection(contentManager);
 
     // WXT provides ctx.onInvalidated for cleanup
     ctx.onInvalidated(() => {
-      console.log('Content script invalidated, cleaning up...');
+      console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] ⚠️ ctx.onInvalidated CALLED - cleaning up...`);
       contentManager.destroy();
+      console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] 🧹 ContentScriptManager.destroy() completed`);
     });
 
-    console.log('Web Time Tracker content script initialized successfully');
+    console.log(`[${CONTENT_SCRIPT_INSTANCE_ID}] 🎉 Content script FULLY INITIALIZED`);
   },
 });
 

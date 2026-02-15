@@ -494,19 +494,24 @@ export class ContentScriptManager {
    * Cleanup resources and destroy manager
    */
   public destroy(): void {
+    console.log(`[ContentScriptManager] 💥 destroy() called - isInitialized: ${this.isInitialized}`);
+
     // Always abort pending operations, even if not fully initialized
     if (this.abortController) {
+      console.log(`[ContentScriptManager] 🛑 Aborting pending operations...`);
       this.abortController.abort();
       this.abortController = null;
     }
 
     if (!this.isInitialized) {
+      console.log(`[ContentScriptManager] ⚠️ Not initialized, skipping cleanup`);
       return;
     }
 
     try {
       // Remove visibility change listener
       if (this.visibilityHandler) {
+        console.log(`[ContentScriptManager] 👁️ Removing visibility handler...`);
         document.removeEventListener(
           "visibilitychange",
           this.visibilityHandler,
@@ -515,14 +520,17 @@ export class ContentScriptManager {
       }
 
       // Destroy all components via registry (handles cleanup properly)
+      console.log(`[ContentScriptManager] 🔧 Calling ComponentRegistry.destroyAll()...`);
       ComponentRegistry.getInstance().destroyAll();
+      console.log(`[ContentScriptManager] 🧹 Clearing local components map (${this.components.size} entries)...`);
       this.components.clear();
 
       // Destroy message router
+      console.log(`[ContentScriptManager] 📨 Destroying message router...`);
       this.messageRouter.destroy();
 
       this.isInitialized = false;
-      console.log("ContentScriptManager destroyed");
+      console.log(`[ContentScriptManager] ✅ destroy() complete`);
     } catch (error) {
       console.error("ContentScriptManager.destroy error:", error);
     }

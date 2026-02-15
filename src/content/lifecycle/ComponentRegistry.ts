@@ -48,9 +48,12 @@ export interface IComponentRegistry {
 export class ComponentRegistry implements IComponentRegistry {
   private static instance: ComponentRegistry | null = null;
   private components = new Map<string, Destroyable>();
+  private readonly instanceId: string;
 
   private constructor() {
     // Private constructor for singleton
+    this.instanceId = `reg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    console.log(`[ComponentRegistry] 🏗️ NEW INSTANCE created: ${this.instanceId}`);
   }
 
   /**
@@ -58,7 +61,10 @@ export class ComponentRegistry implements IComponentRegistry {
    */
   public static getInstance(): ComponentRegistry {
     if (!ComponentRegistry.instance) {
+      console.log(`[ComponentRegistry] 📦 Creating new singleton instance...`);
       ComponentRegistry.instance = new ComponentRegistry();
+    } else {
+      console.log(`[ComponentRegistry] 📦 Returning existing instance: ${ComponentRegistry.instance.instanceId}`);
     }
     return ComponentRegistry.instance;
   }
@@ -67,7 +73,9 @@ export class ComponentRegistry implements IComponentRegistry {
    * Reset the singleton instance. Used for testing.
    */
   public static resetInstance(): void {
+    console.log(`[ComponentRegistry] 🔄 resetInstance() called`);
     if (ComponentRegistry.instance) {
+      console.log(`[ComponentRegistry] 🧹 Destroying existing instance: ${ComponentRegistry.instance.instanceId}`);
       ComponentRegistry.instance.destroyAll();
     }
     ComponentRegistry.instance = null;
@@ -81,12 +89,15 @@ export class ComponentRegistry implements IComponentRegistry {
     factory: ComponentFactory<T, TOptions>,
     options: TOptions
   ): Promise<T> {
+    console.log(`[ComponentRegistry:${this.instanceId}] 📝 register("${name}") START - selector: "${factory.selector}"`);
+
     // 1. Clean orphaned DOM elements from previous extension contexts
     this.cleanupOrphanedElements(factory.selector);
 
     // 2. Destroy existing component with same name (if re-registering)
     const existing = this.components.get(name);
     if (existing) {
+      console.log(`[ComponentRegistry:${this.instanceId}] ♻️ Destroying existing component "${name}" before re-registration`);
       try {
         existing.destroy();
       } catch (error) {
@@ -96,10 +107,13 @@ export class ComponentRegistry implements IComponentRegistry {
     }
 
     // 3. Create new component via factory
+    console.log(`[ComponentRegistry:${this.instanceId}] 🏭 Calling factory.create() for "${name}"...`);
     const component = await factory.create(options);
+    console.log(`[ComponentRegistry:${this.instanceId}] ✅ factory.create() completed for "${name}"`);
 
     // 4. Track it
     this.components.set(name, component);
+    console.log(`[ComponentRegistry:${this.instanceId}] 📝 register("${name}") COMPLETE - now tracking ${this.components.size} component(s)`);
 
     return component;
   }
@@ -122,14 +136,18 @@ export class ComponentRegistry implements IComponentRegistry {
    * Destroy all registered components and clear tracking.
    */
   public destroyAll(): void {
+    console.log(`[ComponentRegistry:${this.instanceId}] 🧹 destroyAll() START - ${this.components.size} component(s) to destroy`);
     for (const [name, component] of this.components.entries()) {
+      console.log(`[ComponentRegistry:${this.instanceId}] 💥 Destroying component "${name}"...`);
       try {
         component.destroy();
+        console.log(`[ComponentRegistry:${this.instanceId}] ✅ Component "${name}" destroyed`);
       } catch (error) {
         console.error(`Error destroying component "${name}":`, error);
       }
     }
     this.components.clear();
+    console.log(`[ComponentRegistry:${this.instanceId}] 🧹 destroyAll() COMPLETE`);
   }
 
   /**
@@ -137,16 +155,26 @@ export class ComponentRegistry implements IComponentRegistry {
    * These are elements from previous extension contexts that weren't cleaned up.
    */
   private cleanupOrphanedElements(selector: string): void {
-    if (!selector || typeof document === "undefined") return;
+    if (!selector || typeof document === "undefined") {
+      console.log(`[ComponentRegistry:${this.instanceId}] 🔍 cleanupOrphanedElements() - skipped (no selector or no document)`);
+      return;
+    }
+
+    console.log(`[ComponentRegistry:${this.instanceId}] 🔍 cleanupOrphanedElements() - searching for: "${selector}"`);
 
     try {
       const orphans = document.querySelectorAll(selector);
+      console.log(`[ComponentRegistry:${this.instanceId}] 🔍 Found ${orphans.length} element(s) matching selector`);
+
       if (orphans && orphans.length > 0) {
-        console.log(
-          `ComponentRegistry: Cleaning up ${orphans.length} orphaned element(s) matching "${selector}"`
-        );
-        // Use Array.from for better compatibility with test environments
-        Array.from(orphans).forEach((el) => el.remove());
+        // Log details about each orphan
+        Array.from(orphans).forEach((el, index) => {
+          console.log(`[ComponentRegistry:${this.instanceId}] 🗑️ Removing orphan ${index + 1}/${orphans.length}: id="${el.id}", tagName="${el.tagName}"`);
+          el.remove();
+        });
+        console.log(`[ComponentRegistry:${this.instanceId}] ✅ Removed ${orphans.length} orphaned element(s)`);
+      } else {
+        console.log(`[ComponentRegistry:${this.instanceId}] ✅ No orphans found - DOM is clean`);
       }
     } catch (error) {
       console.error(
