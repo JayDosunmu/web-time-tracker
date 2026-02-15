@@ -56,6 +56,7 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
 
       timeDisplayPill.onSessionUpdate(sessionState);
@@ -78,6 +79,7 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
       timeDisplayPill.onSessionUpdate(activeState);
       jest.advanceTimersByTime(20);
@@ -92,6 +94,7 @@ describe('TimeDisplayPill', () => {
         isPaused: true,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
       timeDisplayPill.onSessionUpdate(pausedState);
       jest.advanceTimersByTime(20);
@@ -112,6 +115,7 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
 
       timeDisplayPill.onSessionUpdate(sessionState);
@@ -140,6 +144,7 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
       timeDisplayPill.onSessionUpdate(activeState);
       jest.advanceTimersByTime(20);
@@ -154,6 +159,7 @@ describe('TimeDisplayPill', () => {
         isPaused: true,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
       timeDisplayPill.onSessionUpdate(pausedState);
       jest.advanceTimersByTime(20);
@@ -209,6 +215,7 @@ describe('TimeDisplayPill', () => {
       isPaused: false,
       startTime: Date.now() - 5000,
       hourTimes: createEmptyHourTimes(),
+      domainStats: [],
     });
 
     // Note: Shadow DOM uses 'closed' mode, so we test behavior through observable effects
@@ -280,6 +287,7 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
       timeDisplayPill.onSessionUpdate(sessionState);
       jest.advanceTimersByTime(20);
@@ -315,6 +323,7 @@ describe('TimeDisplayPill', () => {
         isPaused: false,
         startTime: Date.now() - 5000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [],
       };
       timeDisplayPill.onSessionUpdate(sessionState);
       jest.advanceTimersByTime(20);

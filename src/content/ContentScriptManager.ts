@@ -22,6 +22,7 @@ import {
 import { PersistenceManager } from "../shared/storage/PersistenceManager";
 import { getDateKey } from "../shared/utils";
 import { extractHourTimes } from "../shared/session";
+import type { DomainListItem } from "../shared/components";
 
 export class ContentScriptManager {
   private static instance: ContentScriptManager | null = null;
@@ -290,6 +291,19 @@ export class ContentScriptManager {
         const totalTimeToday = todayData?.totalTime ?? 0;
         const hourTimes = extractHourTimes(todayData);
 
+        // Build top 5 domain stats for the domain list
+        const domainStats: DomainListItem[] = todayData?.domains
+          ? Object.entries(todayData.domains)
+              .map(([domain, data]) => ({
+                domain,
+                visitCount: data.visitCount,
+                activeTime: data.totalTime,
+                isActive: domain === activeTab.domain && activeTab.active,
+              }))
+              .sort((a, b) => b.activeTime - a.activeTime)
+              .slice(0, 5)
+          : [];
+
         sessionState = {
           domain: activeTab.domain,
           baseCurrentTime: activeTab.totalTime,
@@ -299,6 +313,7 @@ export class ContentScriptManager {
           isPaused: !activeTab.active,
           startTime: activeTab.lastTimerCheck,
           hourTimes,
+          domainStats,
         };
       }
 

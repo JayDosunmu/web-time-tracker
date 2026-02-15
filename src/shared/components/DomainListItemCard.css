@@ -7,6 +7,7 @@
   width: 100%;
   height: 20px;
   padding: 0 8px;
+  box-sizing: border-box;
   background: hsl(0 0% 100%);
   border: 1px solid hsl(214.3 31.8% 91.4%);
   border-radius: 6px;
@@ -87,10 +88,25 @@
   color: hsl(222.2 47.4% 11.2%);
 }
 
-/* Hide visits when container is narrow */
+/* Default: show full time (HH:MM:SS), hide short */
+.domain-card__time--short {
+  display: none;
+}
+
+/* Narrow container: hide visits */
 @container (max-width: 160px) {
   .domain-card__visits {
     display: none;
+  }
+}
+
+/* Narrow container: switch to short time format (HH:MM) */
+@container (max-width: 165px) {
+  .domain-card__time--full {
+    display: none;
+  }
+  .domain-card__time--short {
+    display: block;
   }
 }
 

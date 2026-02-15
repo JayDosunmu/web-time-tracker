@@ -21,12 +21,22 @@ export interface DomainListItemCardProps {
 /**
  * Format milliseconds to HH:MM:SS display string
  */
-function formatTime(milliseconds: number): string {
+function formatTimeFull(milliseconds: number): string {
   const totalSeconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Format milliseconds to H:MM display string (no seconds)
+ */
+function formatTimeShort(milliseconds: number): string {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${hours}:${minutes.toString().padStart(2, "0")}`;
 }
 
 /**
@@ -64,7 +74,8 @@ export const DomainListItemCard: FunctionComponent<DomainListItemCardProps> = ({
         </span>
         <span class="domain-card__visits">({visitCount})</span>
       </span>
-      <span class="domain-card__time">{formatTime(activeTime)}</span>
+      <span class="domain-card__time domain-card__time--full">{formatTimeFull(activeTime)}</span>
+      <span class="domain-card__time domain-card__time--short">{formatTimeShort(activeTime)}</span>
     </div>
   );
 };

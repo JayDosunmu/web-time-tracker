@@ -30,7 +30,9 @@ import pillStyles from "./TimeDisplayPill.styles.css?inline";
 import toggleIconButtonStyles from "./ToggleIconButton.css?inline";
 import tooltipStyles from "./Tooltip.css?inline";
 import timelineChartStyles from "@/shared/components/TimelineChart.css?inline";
-import { TimelineChart } from "@/shared/components";
+import domainListStyles from "@/shared/components/DomainList.css?inline";
+import domainListItemCardStyles from "@/shared/components/DomainListItemCard.css?inline";
+import { TimelineChart, DomainList, type DomainListItem } from "@/shared/components";
 
 export type { PillPosition };
 
@@ -43,6 +45,7 @@ export interface SessionState {
   isPaused: boolean;
   startTime: number;
   hourTimes: HourTimesAggregate;
+  domainStats: DomainListItem[];
 }
 
 /**
@@ -497,6 +500,17 @@ export const Pill: FunctionComponent<PillProps> = ({
             <span class="clock">{clockTime}</span>
           </span>
         </div>
+        {/* Domain list - only in expanded mode */}
+        {showFullInfo && sessionState.domainStats.length > 0 && (
+          <div class="pill-domains">
+            <h3 class="pill-domains__header">Most Active Sites</h3>
+            <DomainList
+              items={sessionState.domainStats}
+              sortBy={(a, b) => b.activeTime - a.activeTime}
+              maxRows={5}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -713,7 +727,7 @@ export class TimeDisplayPill {
     // Inject styles into shadow root
     const style = document.createElement("style");
     style.textContent =
-      pillStyles + "\n" + toggleIconButtonStyles + "\n" + tooltipStyles + "\n" + timelineChartStyles;
+      pillStyles + "\n" + toggleIconButtonStyles + "\n" + tooltipStyles + "\n" + timelineChartStyles + "\n" + domainListStyles + "\n" + domainListItemCardStyles;
     this.shadowRoot.appendChild(style);
 
     // Create render container for Preact
@@ -805,7 +819,7 @@ export async function createTimeDisplayPill(
   const ui = await createShadowRootUi(ctx, {
     name: "web-time-tracker-pill",
     position: "overlay",
-    css: pillStyles + "\n" + toggleIconButtonStyles + "\n" + tooltipStyles + "\n" + timelineChartStyles,
+    css: pillStyles + "\n" + toggleIconButtonStyles + "\n" + tooltipStyles + "\n" + timelineChartStyles + "\n" + domainListStyles + "\n" + domainListItemCardStyles,
 
     onMount(container: HTMLElement) {
       // Define render function
