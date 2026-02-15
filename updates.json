@@ -1,0 +1,12 @@
+{
+  "addons": {
+    "take5-time-tracker@extension.local": {
+      "updates": [
+        {
+          "version": "0.0.1",
+          "update_link": "https://storage.googleapis.com/take5/extension/take5_time_tracker-0.0.1.xpi"
+        }
+      ]
+    }
+  }
+}

@@ -45,7 +45,11 @@ export default defineConfig({
         strict_min_version: "109.0",
         update_url:
           "https://storage.googleapis.com/take5/extension/updates.json",
-      },
+        // AMO requires data_collection_permissions declaration
+        data_collection_permissions: {
+          required: ["none"],
+        },
+      } as Record<string, unknown>,
     },
   },
 });
