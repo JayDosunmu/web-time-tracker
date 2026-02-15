@@ -524,12 +524,16 @@ export class TimeDisplayPill {
     | null = null;
   private onHiddenChangeCallback: ((hidden: boolean) => void) | null = null;
   private animationFrameId: number | null = null;
+  private readonly instanceId: string;
 
   constructor(
     initialPosition?: PillPosition,
     initialShowFullInfo?: boolean,
     initialHidden?: boolean,
   ) {
+    this.instanceId = `pill_class_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    console.log(`[TimeDisplayPill:${this.instanceId}] 🏗️ CONSTRUCTOR called (class-based)`);
+
     this.state = {
       sessionState: null,
       // Use provided position or default to top-right (will be clamped to actual viewport)
@@ -540,6 +544,7 @@ export class TimeDisplayPill {
       hidden: initialHidden ?? false,
     };
     this.mount();
+    console.log(`[TimeDisplayPill:${this.instanceId}] ✅ CONSTRUCTOR complete - mounted to DOM`);
   }
 
   /**
@@ -603,16 +608,20 @@ export class TimeDisplayPill {
    * Destroy the component and cleanup
    */
   public destroy(): void {
+    console.log(`[TimeDisplayPill:${this.instanceId}] 💥 destroy() called`);
     this.stopAnimation();
     if (this.container) {
+      console.log(`[TimeDisplayPill:${this.instanceId}] 🧹 Unmounting Preact component...`);
       render(null, this.container);
     }
     if (this.element && this.element.parentNode) {
+      console.log(`[TimeDisplayPill:${this.instanceId}] 🗑️ Removing element from DOM...`);
       this.element.parentNode.removeChild(this.element);
     }
     this.element = null;
     this.shadowRoot = null;
     this.container = null;
+    console.log(`[TimeDisplayPill:${this.instanceId}] ✅ destroy() complete`);
   }
 
   /**
@@ -766,6 +775,9 @@ export async function createTimeDisplayPill(
   initialShowFullInfo?: boolean,
   initialHidden?: boolean,
 ): Promise<TimeDisplayPillApi> {
+  const instanceId = `pill_wxt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  console.log(`[createTimeDisplayPill:${instanceId}] 🏗️ FACTORY FUNCTION called (WXT-based)`);
+
   // State management
   const state = {
     sessionState: null as SessionState | null,
@@ -786,6 +798,8 @@ export async function createTimeDisplayPill(
   // Animation state
   let animationFrameId: number | null = null;
   let renderFn: (() => void) | null = null;
+
+  console.log(`[createTimeDisplayPill:${instanceId}] 📦 Creating Shadow Root UI via WXT...`);
 
   // Create the Shadow Root UI
   const ui = await createShadowRootUi(ctx, {
@@ -832,18 +846,24 @@ export async function createTimeDisplayPill(
         | { container: HTMLElement; renderFn: (() => void) | null }
         | undefined,
     ) {
+      console.log(`[createTimeDisplayPill:${instanceId}] 🔥 onRemove() callback invoked by WXT`);
       // Cleanup animation
       if (animationFrameId !== null) {
+        console.log(`[createTimeDisplayPill:${instanceId}] 🛑 Cancelling animation frame`);
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
       }
       if (mounted) {
+        console.log(`[createTimeDisplayPill:${instanceId}] 🧹 Unmounting Preact component`);
         render(null, mounted.container);
       }
+      console.log(`[createTimeDisplayPill:${instanceId}] ✅ onRemove() complete`);
     },
   });
 
+  console.log(`[createTimeDisplayPill:${instanceId}] 📌 Calling ui.mount()...`);
   ui.mount();
+  console.log(`[createTimeDisplayPill:${instanceId}] ✅ ui.mount() complete - pill is now in DOM`);
 
   // Animation helpers
   const shouldAnimate = () =>
@@ -908,7 +928,9 @@ export async function createTimeDisplayPill(
     },
 
     destroy() {
+      console.log(`[createTimeDisplayPill:${instanceId}] 💥 destroy() called - invoking ui.remove()...`);
       ui.remove();
+      console.log(`[createTimeDisplayPill:${instanceId}] ✅ destroy() complete`);
     },
   };
 }
@@ -938,12 +960,16 @@ export const TimeDisplayPillFactory: ComponentFactory<
   TimeDisplayPillApi,
   TimeDisplayPillOptions
 > = {
-  selector:
-    '#web-time-tracker-pill, [data-wxt-shadow-root="web-time-tracker-pill"]',
+  // Selector covers both implementations:
+  // - '#web-time-tracker-pill' → class-based TimeDisplayPill (div with id)
+  // - 'web-time-tracker-pill' → WXT createShadowRootUi (custom element tag name)
+  selector: "#web-time-tracker-pill, web-time-tracker-pill",
 
   async create(options: TimeDisplayPillOptions): Promise<TimeDisplayPillApi> {
+    console.log(`[TimeDisplayPillFactory] 🏭 create() called - ctx provided: ${!!options.ctx}`);
     if (options.ctx) {
       // Use WXT factory function for HMR support and automatic cleanup
+      console.log(`[TimeDisplayPillFactory] 🔀 Using WXT factory (createTimeDisplayPill)`);
       return createTimeDisplayPill(
         options.ctx,
         options.position,
@@ -952,6 +978,7 @@ export const TimeDisplayPillFactory: ComponentFactory<
       );
     }
     // Fallback to class-based approach (for tests or non-WXT environments)
+    console.log(`[TimeDisplayPillFactory] 🔀 Using class-based fallback (new TimeDisplayPill)`);
     return new TimeDisplayPill(
       options.position,
       options.showFullInfo,
