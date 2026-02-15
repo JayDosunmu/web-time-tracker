@@ -337,6 +337,41 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Domain list section in expanded view */
+.pill-domains {
+  margin-top: 8px;
+  /* Slide animation - only hide vertical overflow */
+  overflow-x: visible;
+  overflow-y: hidden;
+  transition:
+    max-height var(--transition-duration) var(--transition-timing),
+    opacity var(--transition-duration) var(--transition-timing),
+    margin-top var(--transition-duration) var(--transition-timing);
+}
+
+/* Minimal mode: domains section collapses */
+.pill-card.minimal .pill-domains {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+/* Fit to content - no overflow scroll */
+.pill-domains .domain-list {
+  overflow-x: visible;
+  overflow-y: visible;
+}
+
+/* Domain list header */
+.pill-domains__header {
+  margin: 0 0 6px 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 /* State: Paused */
 .pill-card.paused {
   color: var(--color-muted);
@@ -385,7 +420,8 @@
 
 .pill-card.hovered .pill-header,
 .pill-card.hovered .pill-main,
-.pill-card.hovered .pill-footer {
+.pill-card.hovered .pill-footer,
+.pill-card.hovered .pill-domains {
   visibility: hidden;
 }
 

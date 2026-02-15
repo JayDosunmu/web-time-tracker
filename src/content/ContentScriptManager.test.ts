@@ -377,6 +377,14 @@ describe("ContentScriptManager", () => {
         isPaused: false,
         startTime: 1000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [
+          {
+            domain: "example.com",
+            visitCount: 3,
+            activeTime: 5000,
+            isActive: true,
+          },
+        ],
       });
     });
 
@@ -557,6 +565,14 @@ describe("ContentScriptManager", () => {
         isPaused: false,
         startTime: 1000,
         hourTimes: createEmptyHourTimes(),
+        domainStats: [
+          {
+            domain: "example.com",
+            visitCount: 3,
+            activeTime: 5000,
+            isActive: true,
+          },
+        ],
       });
     });
 
