@@ -145,6 +145,13 @@ npm run build:firefox
 - **Jest** -- unit testing with `ts-jest` and `jsdom` environment
 - **ESLint** -- code quality enforcement
 
+## Updates
+
+The extension checks for updates at:
+```
+https://storage.googleapis.com/take5/extension/updates.json
+```
+
 ## License
 
 MIT

@@ -1,7 +1,7 @@
 {
-  "name": "web-time-tracker",
+  "name": "take5-time-tracker",
   "version": "1.0.0",
-  "description": "Firefox extension to track time spent on different domains",
+  "description": "Browser extension to track time spent on different domains",
   "main": "dist/background.js",
   "scripts": {
     "dev": "wxt",
@@ -127,7 +127,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JayDosunmu/web-time-tracker.git"
+    "url": "git+https://github.com/JayDosunmu/take5-time-tracker.git"
   },
   "keywords": [
     "firefox",
