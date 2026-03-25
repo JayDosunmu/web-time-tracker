@@ -145,12 +145,23 @@ npm run build:firefox
 - **Jest** -- unit testing with `ts-jest` and `jsdom` environment
 - **ESLint** -- code quality enforcement
 
-## Updates
+## Releases
 
-The extension checks for updates at:
+The project uses automated CI/CD for releases. Push a version tag to trigger the release pipeline:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
-https://storage.googleapis.com/take5/extension/updates.json
-```
+
+This automatically:
+- Runs quality checks (lint, type-check, tests)
+- Builds Chrome and Firefox extensions
+- Submits to Firefox Add-ons (AMO) for review
+- Publishes stable releases to Chrome Web Store
+- Creates a GitHub Release with changelog
+
+For detailed setup and configuration, see [Release Process](docs/release-process.md).
 
 ## License
 

@@ -1,6 +1,6 @@
 {
   "name": "take5-time-tracker",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Browser extension to track time spent on different domains",
   "main": "dist/background.js",
   "scripts": {

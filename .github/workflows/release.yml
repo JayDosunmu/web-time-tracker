@@ -1,0 +1,201 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript type check
+        run: npm run type-check
+
+      - name: Run tests
+        run: npm test
+
+  build-and-package:
+    name: Build & Package
+    needs: quality-gates
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      is_prerelease: ${{ steps.version.outputs.IS_PRERELEASE }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this is a pre-release (contains hyphen like -beta, -alpha, -rc)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version --allow-same-version
+
+      - name: Build for all browsers
+        run: npm run build:all
+
+      - name: Create Chrome zip
+        run: |
+          cd .output/chrome-mv3
+          zip -r ../../take5-time-tracker-${{ steps.version.outputs.VERSION }}-chrome.zip .
+
+      - name: Create Firefox zip
+        run: |
+          cd .output/firefox-mv2
+          zip -r ../../take5-time-tracker-${{ steps.version.outputs.VERSION }}-firefox.zip .
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-builds
+          path: |
+            take5-time-tracker-${{ steps.version.outputs.VERSION }}-chrome.zip
+            take5-time-tracker-${{ steps.version.outputs.VERSION }}-firefox.zip
+            .output/firefox-mv2/
+          retention-days: 30
+
+  publish-firefox-amo:
+    name: Publish to Firefox Add-ons
+    needs: build-and-package
+    runs-on: ubuntu-latest
+    # Only publish stable releases to AMO
+    if: needs.build-and-package.outputs.is_prerelease == 'false'
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-builds
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Submit to Firefox Add-ons (AMO)
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.MOZILLA_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.MOZILLA_API_SECRET }}
+        run: |
+          web-ext sign \
+            --source-dir .output/firefox-mv2 \
+            --channel listed \
+            --api-key "$WEB_EXT_API_KEY" \
+            --api-secret "$WEB_EXT_API_SECRET"
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: build-and-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-builds
+          path: ./artifacts
+
+      - name: Generate changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configuration: ".github/changelog-config.json"
+          failOnError: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ needs.build-and-package.outputs.version }}
+          body: |
+            ## Changes
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Installation
+
+            ### Chrome/Edge/Brave
+            - **Chrome Web Store**: Install from the [Chrome Web Store](https://chrome.google.com/webstore) (auto-updates enabled)
+            - **Manual**: Download `take5-time-tracker-${{ needs.build-and-package.outputs.version }}-chrome.zip`, extract, and load unpacked at `chrome://extensions`
+
+            ### Firefox
+            - **Firefox Add-ons**: Install from [Firefox Add-ons (AMO)](https://addons.mozilla.org) (auto-updates enabled)
+            - **Manual**: Download `take5-time-tracker-${{ needs.build-and-package.outputs.version }}-firefox.zip` for manual installation
+          prerelease: ${{ needs.build-and-package.outputs.is_prerelease }}
+          files: |
+            ./artifacts/take5-time-tracker-${{ needs.build-and-package.outputs.version }}-chrome.zip
+            ./artifacts/take5-time-tracker-${{ needs.build-and-package.outputs.version }}-firefox.zip
+          fail_on_unmatched_files: false
+
+  publish-chrome:
+    name: Publish to Chrome Web Store
+    needs: [build-and-package, create-github-release]
+    runs-on: ubuntu-latest
+    # Only publish stable releases to Chrome Web Store
+    if: needs.build-and-package.outputs.is_prerelease == 'false'
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-builds
+          path: ./artifacts
+
+      - name: Publish to Chrome Web Store
+        uses: mnao305/chrome-extension-upload@v5.0.0
+        with:
+          file-path: ./artifacts/take5-time-tracker-${{ needs.build-and-package.outputs.version }}-chrome.zip
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          publish: true

@@ -1,5 +1,6 @@
 import { defineConfig } from "wxt";
 import preact from "@preact/preset-vite";
+import pkg from "./package.json";
 
 export default defineConfig({
   srcDir: "src",
@@ -10,7 +11,7 @@ export default defineConfig({
 
   manifest: {
     name: "Take5 Time Tracker",
-    version: "0.0.1",
+    version: pkg.version,
     description: "Track time spent on different domains",
     permissions: [
       "tabs",
@@ -43,9 +44,8 @@ export default defineConfig({
       gecko: {
         id: "take5-time-tracker@extension.local",
         strict_min_version: "109.0",
-        update_url:
-          "https://storage.googleapis.com/take5/extension/updates.json",
-        // AMO requires data_collection_permissions declaration
+        // AMO handles updates for listed extensions
+        // data_collection_permissions required for AMO submission
         data_collection_permissions: {
           required: ["none"],
         },

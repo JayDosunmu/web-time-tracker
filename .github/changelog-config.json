@@ -1,0 +1,36 @@
+{
+  "categories": [
+    {
+      "title": "## New Features",
+      "labels": ["feature", "enhancement", "feat"]
+    },
+    {
+      "title": "## Bug Fixes",
+      "labels": ["bug", "fix", "bugfix"]
+    },
+    {
+      "title": "## Improvements",
+      "labels": ["improvement", "refactor", "perf", "performance"]
+    },
+    {
+      "title": "## Documentation",
+      "labels": ["documentation", "docs"]
+    },
+    {
+      "title": "## Other Changes",
+      "labels": ["chore", "ci", "build", "test"]
+    }
+  ],
+  "ignore_labels": ["skip-changelog"],
+  "sort": {
+    "order": "ASC",
+    "on_property": "mergedAt"
+  },
+  "template": "#{{CHANGELOG}}\n\n**Full Changelog**: #{{RELEASE_DIFF}}",
+  "pr_template": "- #{{TITLE}} (#{{NUMBER}}) by @#{{AUTHOR}}",
+  "empty_template": "No notable changes in this release.",
+  "transformers": [],
+  "max_tags_to_fetch": 200,
+  "max_pull_requests": 200,
+  "max_back_track_time_days": 365
+}
