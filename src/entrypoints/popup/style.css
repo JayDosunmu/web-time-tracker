@@ -158,8 +158,13 @@ section h2 {
   margin-top: 8px;
 }
 
+.debug-controls {
+  display: flex;
+  gap: 8px;
+}
+
 .debug-toggle {
-  width: 100%;
+  flex: 1;
   padding: 10px 16px;
   background: #f1f5f9;
   border: 1px solid #cbd5e1;

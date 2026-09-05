@@ -153,6 +153,18 @@ export const App: FunctionComponent = () => {
     setState((prev) => ({ ...prev, showDebug: !prev.showDebug }));
   };
 
+  const downloadStorageData = (): void => {
+    if (!state.storageData) return;
+    const json = JSON.stringify(state.storageData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `take5-storage-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Derive domain items for the DomainList
   const domainItems: DomainListItem[] = (() => {
     const domains = state.storageData?.todayData?.domains;
@@ -253,9 +265,16 @@ export const App: FunctionComponent = () => {
       <div class="divider" />
 
       <section class="debug-section">
-        <button class="debug-toggle" onClick={toggleDebug}>
-          {state.showDebug ? "Hide" : "Show"} Storage Data
-        </button>
+        <div class="debug-controls">
+          <button class="debug-toggle" onClick={toggleDebug}>
+            {state.showDebug ? "Hide" : "Show"} Storage Data
+          </button>
+          {state.showDebug && state.storageData && (
+            <button class="debug-toggle" onClick={downloadStorageData}>
+              Download Storage Data
+            </button>
+          )}
+        </div>
 
         {state.showDebug && state.storageData && (
           <div class="debug-data">
