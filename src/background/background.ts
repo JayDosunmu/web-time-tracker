@@ -387,7 +387,11 @@ export class BackgroundService {
         timestamp: Date.now(),
       };
 
-      await browser.tabs.sendMessage(tabId, message);
+      const response = await browser.tabs.sendMessage(tabId, message);
+      console.log(
+        `[Background] REFRESH_STATE sent to tab=${tabId} reason="${reason}" | response:`,
+        response,
+      );
     } catch {
       // Content script may not be loaded on this tab - this is normal
     }

@@ -227,17 +227,16 @@ describe('MessageRouter', () => {
       expect(result).toBe(true);
     });
 
-    it('should handle invalid message format', async () => {
+    it('should silently drop invalid message format without responding', async () => {
+      // Responding to invalid messages from a stale router instance would
+      // clobber the real router's response when multiple listeners coexist
       const invalidMessage = { invalid: 'message' };
       const mockSendResponse = jest.fn();
 
       const messageListener = (browser.runtime.onMessage.addListener as jest.Mock).mock.calls[0][0];
       const result = await messageListener(invalidMessage, {}, mockSendResponse);
 
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'Invalid message format'
-      });
+      expect(mockSendResponse).not.toHaveBeenCalled();
       expect(result).toBe(true);
     });
 

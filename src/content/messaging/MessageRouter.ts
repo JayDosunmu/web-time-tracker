@@ -13,22 +13,41 @@ import type {
 } from "../../../types";
 
 export class MessageRouter implements MessageSender {
+  private static listenerCount = 0;
+  private static instanceCounter = 0;
+
   private handlers = new Map<string, MessageHandler>();
   private isInitialized = false;
+  private readonly instanceId: number;
+  private boundHandler: ((message: ExtensionMessageUnion, sender: browser.runtime.MessageSender, sendResponse: (response: MessageResponse) => void) => Promise<boolean>) | null = null;
+
+  constructor() {
+    this.instanceId = ++MessageRouter.instanceCounter;
+    console.log(
+      `[MessageRouter#${this.instanceId}] constructed | total instances created: ${MessageRouter.instanceCounter}, active listeners: ${MessageRouter.listenerCount}`,
+    );
+  }
 
   /**
    * Initialize the message router and register browser message listener
    */
   public initialize(): void {
     if (this.isInitialized) {
+      console.log(
+        `[MessageRouter#${this.instanceId}] initialize() skipped — already initialized | active listeners: ${MessageRouter.listenerCount}`,
+      );
       return;
     }
 
-    // Register browser runtime message listener
-    browser.runtime.onMessage.addListener(this.handleMessage.bind(this));
+    // Store bound reference so we can remove it later
+    this.boundHandler = this.handleMessage.bind(this) as typeof this.boundHandler;
+    browser.runtime.onMessage.addListener(this.boundHandler!);
+    MessageRouter.listenerCount++;
     this.isInitialized = true;
 
-    console.log("MessageRouter initialized for content script");
+    console.log(
+      `[MessageRouter#${this.instanceId}] LISTENER REGISTERED | active listeners: ${MessageRouter.listenerCount} (+1)`,
+    );
   }
 
   /**
@@ -124,19 +143,25 @@ export class MessageRouter implements MessageSender {
     sender: browser.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void,
   ): Promise<boolean> {
+    const receivedAt = performance.now();
+    const ts = new Date().toISOString();
+
     try {
       // Validate message structure
       if (!this.isValidMessage(message)) {
-        console.warn("MessageRouter received invalid message:", message);
-        sendResponse({ success: false, error: "Invalid message format" });
         return true;
       }
+
+      console.log(
+        `[MessageRouter#${this.instanceId}] [${ts}] RECV type="${message.type}" | active listeners: ${MessageRouter.listenerCount}, handlers registered: ${this.handlers.size}`,
+      );
 
       // Find and execute handler
       const handler = this.handlers.get(message.type);
       if (!handler) {
+        const elapsed = (performance.now() - receivedAt).toFixed(2);
         console.warn(
-          `MessageRouter: No handler registered for message type: ${message.type}`,
+          `[MessageRouter#${this.instanceId}] [${ts}] RESPOND type="${message.type}" status=no_handler elapsed=${elapsed}ms | registered types: [${[...this.handlers.keys()].join(", ")}]`,
         );
         sendResponse({
           success: false,
@@ -151,10 +176,17 @@ export class MessageRouter implements MessageSender {
       // Handle async handlers
       if (result instanceof Promise) {
         result
-          .then((response) => sendResponse(response))
+          .then((response) => {
+            const elapsed = (performance.now() - receivedAt).toFixed(2);
+            console.log(
+              `[MessageRouter#${this.instanceId}] [${ts}] RESPOND type="${message.type}" status=success elapsed=${elapsed}ms`,
+            );
+            sendResponse(response);
+          })
           .catch((error) => {
+            const elapsed = (performance.now() - receivedAt).toFixed(2);
             console.error(
-              `MessageRouter handler error for ${message.type}:`,
+              `[MessageRouter#${this.instanceId}] [${ts}] RESPOND type="${message.type}" status=error elapsed=${elapsed}ms`,
               error,
             );
             sendResponse({
@@ -170,12 +202,20 @@ export class MessageRouter implements MessageSender {
 
       // Handle sync handlers
       if (typeof result === "boolean") {
+        const elapsed = (performance.now() - receivedAt).toFixed(2);
+        console.log(
+          `[MessageRouter#${this.instanceId}] [${ts}] RESPOND type="${message.type}" status=sync elapsed=${elapsed}ms`,
+        );
         return result;
       }
 
       return true;
     } catch (error) {
-      console.error("MessageRouter.handleMessage error:", error);
+      const elapsed = (performance.now() - receivedAt).toFixed(2);
+      console.error(
+        `[MessageRouter#${this.instanceId}] [${ts}] RESPOND type="${message.type}" status=exception elapsed=${elapsed}ms`,
+        error,
+      );
       sendResponse({
         success: false,
         error:
@@ -214,16 +254,39 @@ export class MessageRouter implements MessageSender {
    */
   public destroy(): void {
     if (!this.isInitialized) {
+      console.log(
+        `[MessageRouter#${this.instanceId}] destroy() skipped — not initialized | active listeners: ${MessageRouter.listenerCount}`,
+      );
       return;
     }
 
     // Clear all handlers
     this.handlers.clear();
 
-    // Note: browser.runtime.onMessage.removeListener is not reliable
-    // The listener will be cleaned up when the content script is destroyed
+    // Attempt to remove the listener
+    if (this.boundHandler) {
+      try {
+        browser.runtime.onMessage.removeListener(this.boundHandler);
+        MessageRouter.listenerCount--;
+        console.log(
+          `[MessageRouter#${this.instanceId}] LISTENER REMOVED | active listeners: ${MessageRouter.listenerCount} (-1)`,
+        );
+      } catch (error) {
+        console.warn(
+          `[MessageRouter#${this.instanceId}] removeListener failed — listener may be orphaned | active listeners: ${MessageRouter.listenerCount}`,
+          error,
+        );
+      }
+      this.boundHandler = null;
+    } else {
+      console.warn(
+        `[MessageRouter#${this.instanceId}] destroy() called but no boundHandler reference — listener is ORPHANED and cannot be removed | active listeners: ${MessageRouter.listenerCount}`,
+      );
+    }
 
     this.isInitialized = false;
-    console.log("MessageRouter destroyed");
+    console.log(
+      `[MessageRouter#${this.instanceId}] destroyed | active listeners: ${MessageRouter.listenerCount}`,
+    );
   }
 }

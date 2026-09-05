@@ -105,7 +105,7 @@ describe("ContentScriptManager", () => {
     } as any;
 
     // Mock constructors
-    (MessageRouter as jest.Mock).mockImplementation(() => mockMessageRouter);
+    (MessageRouter as unknown as jest.Mock).mockImplementation(() => mockMessageRouter);
     (TimeDisplayPill as jest.Mock).mockImplementation(
       () => mockTimeDisplayPill,
     );
