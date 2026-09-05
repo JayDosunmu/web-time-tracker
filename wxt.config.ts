@@ -42,7 +42,7 @@ export default defineConfig({
 
     browser_specific_settings: {
       gecko: {
-        id: "take5-time-tracker@extension.local",
+        id: "time-tracker@heytakefive.com",
         strict_min_version: "109.0",
         // AMO handles updates for listed extensions
         // data_collection_permissions required for AMO submission

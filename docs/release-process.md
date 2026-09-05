@@ -144,7 +144,7 @@ The following secrets must be configured in GitHub repository settings:
 ### Firefox AMO Submission Failures
 
 - Verify Mozilla API credentials are valid
-- Check that the extension ID matches `take5-time-tracker@extension.local`
+- Check that the extension ID matches `time-tracker@heytakefive.com`
 - Ensure the version hasn't been previously submitted
 - Review AMO's [add-on policies](https://extensionworkshop.com/documentation/publish/add-on-policies/)
 
