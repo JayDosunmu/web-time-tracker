@@ -70,7 +70,11 @@ export class BadgeService {
     try {
       const text = this.formatBadgeTime(totalTimeMs);
       await actionApi.setBadgeText({ text });
-      await actionApi.setBadgeBackgroundColor({ color: "#4285f4" });
+      await actionApi.setBadgeBackgroundColor({ color: "#ffffff" });
+      // Badge text defaults to white in Chrome; pin a dark color so it
+      // stays readable on the white background. Optional-chained because
+      // not every browser implements setBadgeTextColor.
+      await actionApi.setBadgeTextColor?.({ color: "#222" });
     } catch (error) {
       console.error("BadgeService.updateBadge error:", error);
     }
