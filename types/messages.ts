@@ -1,9 +1,17 @@
+// Contexts that receive messages on the shared runtime bus. Every context
+// must return without responding for messages addressed elsewhere; an absent
+// target means "background" (all pre-existing message types).
+export type MessageTarget = "background" | "offscreen";
+
 // Base message interface for all extension communications
 export interface ExtensionMessage {
   type: string;
   payload: unknown;
   id: string;
   timestamp: number;
+  // `| undefined` keeps generic Omit-and-respread call sites assignable
+  // under exactOptionalPropertyTypes
+  target?: MessageTarget | undefined;
 }
 
 // Message response wrapper for async communication
@@ -103,6 +111,21 @@ export interface UpdatePillHiddenMessage extends ExtensionMessage {
   };
 }
 
+// Ask the offscreen document to create a blob object URL for the given JSON
+// (Chrome only — the MV3 service worker has no createObjectURL)
+export interface OffscreenMintUrlMessage extends ExtensionMessage {
+  type: "OFFSCREEN_MINT_URL";
+  target: "offscreen";
+  payload: { json: string };
+}
+
+// Ask the offscreen document to revoke a previously minted object URL
+export interface OffscreenReleaseUrlMessage extends ExtensionMessage {
+  type: "OFFSCREEN_RELEASE_URL";
+  target: "offscreen";
+  payload: { url: string };
+}
+
 // Error report from content script
 export interface ErrorReportMessage extends ExtensionMessage {
   type: "ERROR_REPORT";
@@ -122,4 +145,6 @@ export type ExtensionMessageUnion =
   | UpdatePillPositionMessage
   | UpdatePillShowFullInfoMessage
   | UpdatePillHiddenMessage
+  | OffscreenMintUrlMessage
+  | OffscreenReleaseUrlMessage
   | ErrorReportMessage;

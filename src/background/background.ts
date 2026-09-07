@@ -131,6 +131,13 @@ export class BackgroundService {
     sendResponse: (response: MessageResponse) => void,
   ): Promise<boolean> {
     try {
+      // Messages addressed to another context (e.g. the offscreen document)
+      // are not ours to answer — responding here would race the real
+      // recipient's reply on the shared runtime bus.
+      if (message.target !== undefined && message.target !== "background") {
+        return false;
+      }
+
       console.log(
         `BackgroundService received message: ${message.type}`,
         message,
