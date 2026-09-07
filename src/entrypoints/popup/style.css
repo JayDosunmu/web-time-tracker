@@ -153,6 +153,32 @@ section h2 {
   border: 1px solid #e2e8f0;
 }
 
+.secondary-button {
+  width: 100%;
+  padding: 10px 16px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.secondary-button:active:not(:disabled) {
+  background: #cbd5e1;
+}
+
+.secondary-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 /* Data section (export) */
 .data-section {
   margin-top: 8px;
@@ -162,17 +188,12 @@ section h2 {
   position: relative;
 }
 
-/* Shares .debug-toggle's visual style; adds only spinner layout */
+/* Spinner layout on top of .secondary-button */
 .export-button {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-}
-
-.export-button:disabled {
-  opacity: 0.7;
-  cursor: default;
 }
 
 .spinner {
@@ -230,27 +251,6 @@ section h2 {
 /* Debug section */
 .debug-section {
   margin-top: 8px;
-}
-
-.debug-toggle {
-  width: 100%;
-  padding: 10px 16px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.debug-toggle:hover {
-  background: #e2e8f0;
-}
-
-.debug-toggle:active {
-  background: #cbd5e1;
 }
 
 .debug-data {

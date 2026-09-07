@@ -258,7 +258,7 @@ export const App: FunctionComponent = () => {
       <section class="data-section">
         <div class="export-anchor">
           <button
-            class="debug-toggle export-button"
+            class="secondary-button export-button"
             onClick={dataExport.startExport}
             disabled={dataExport.status === "pending"}
           >
@@ -280,7 +280,7 @@ export const App: FunctionComponent = () => {
       </section>
 
       <section class="debug-section">
-        <button class="debug-toggle" onClick={toggleDebug}>
+        <button class="secondary-button" onClick={toggleDebug}>
           {state.showDebug ? "Hide" : "Show"} Storage Data
         </button>
 
