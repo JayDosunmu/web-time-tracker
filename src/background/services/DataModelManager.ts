@@ -192,6 +192,28 @@ export class DataModelManager {
   }
 
   /**
+   * Checkpoint the live session into storage immediately.
+   *
+   * Folds elapsed time since the last checkpoint into today's day record so
+   * that storage reflects this exact moment. Used by export (FLUSH_SESSION)
+   * so the file isn't missing un-checkpointed seconds. No-op when nothing is
+   * actively tracking.
+   */
+  async checkpointNow(): Promise<void> {
+    if (!this.activeTab || !this.activeTab.active) {
+      return;
+    }
+
+    const now = Date.now();
+    const elapsed = now - this.activeTab.lastTimerCheck;
+
+    await this.recordElapsedTime(elapsed, now);
+
+    this.activeTab.lastTimerCheck = now;
+    await this.tabRepository.setActiveTab(this.activeTab);
+  }
+
+  /**
    * Handle day elapsed event - called when crossing a day boundary
    */
   async handleDayElapsed(): Promise<void> {

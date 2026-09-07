@@ -111,6 +111,14 @@ export interface UpdatePillHiddenMessage extends ExtensionMessage {
   };
 }
 
+// Request a full data export (any UI surface -> background). The response's
+// data carries the terminal outcome; canceling the save dialog is a user
+// decision reported as outcome "canceled", not an error.
+export interface ExportDataMessage extends ExtensionMessage {
+  type: "EXPORT_DATA";
+  payload: Record<string, never>;
+}
+
 // Ask the offscreen document to create a blob object URL for the given JSON
 // (Chrome only — the MV3 service worker has no createObjectURL)
 export interface OffscreenMintUrlMessage extends ExtensionMessage {
@@ -145,6 +153,7 @@ export type ExtensionMessageUnion =
   | UpdatePillPositionMessage
   | UpdatePillShowFullInfoMessage
   | UpdatePillHiddenMessage
+  | ExportDataMessage
   | OffscreenMintUrlMessage
   | OffscreenReleaseUrlMessage
   | ErrorReportMessage;
