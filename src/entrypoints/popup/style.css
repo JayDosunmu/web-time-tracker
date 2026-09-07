@@ -158,25 +158,16 @@ section h2 {
   margin-top: 8px;
 }
 
+.export-anchor {
+  position: relative;
+}
+
+/* Shares .debug-toggle's visual style; adds only spinner layout */
 .export-button {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%;
-  padding: 10px 16px;
-  background: #4a4199;
-  border: 1px solid #4a4199;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.export-button:hover:not(:disabled) {
-  background: #5a4fa8;
 }
 
 .export-button:disabled {
@@ -187,8 +178,8 @@ section h2 {
 .spinner {
   width: 12px;
   height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #ffffff;
+  border: 2px solid rgba(51, 65, 85, 0.3);
+  border-top-color: #334155;
   border-radius: 50%;
   animation: export-spin 0.8s linear infinite;
 }
@@ -199,25 +190,41 @@ section h2 {
   }
 }
 
-.export-status {
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.export-status.success {
-  color: #16a34a;
-}
-
-.export-status.error {
-  color: #dc2626;
-}
-
-.data-hint {
-  margin-top: 8px;
+.export-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 230px;
+  padding: 8px 10px;
+  background: #1e293b;
+  color: #f8fafc;
   font-size: 11px;
-  color: #64748b;
   line-height: 1.4;
+  text-align: center;
+  border-radius: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Tail pointing up at the button */
+.export-tooltip::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: #1e293b;
+}
+
+.export-anchor:hover .export-tooltip,
+.export-button:focus-visible + .export-tooltip {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* Debug section */

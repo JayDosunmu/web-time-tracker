@@ -256,34 +256,28 @@ export const App: FunctionComponent = () => {
       <div class="divider" />
 
       <section class="data-section">
-        <h2>Data</h2>
-        <button
-          class="export-button"
-          onClick={dataExport.startExport}
-          disabled={dataExport.status === "pending"}
-        >
-          <span>Export My Data</span>
-          {dataExport.status === "pending" && (
-            <span class="spinner" aria-hidden="true" />
-          )}
-        </button>
-        {dataExport.status === "success" && (
-          <div class="export-status success" role="status">
-            Exported ✓
+        <div class="export-anchor">
+          <button
+            class="debug-toggle export-button"
+            onClick={dataExport.startExport}
+            disabled={dataExport.status === "pending"}
+          >
+            <span>
+              {dataExport.status === "success"
+                ? "Exported ✓"
+                : "Export My Data"}
+            </span>
+            {dataExport.status === "pending" && (
+              <span class="spinner" aria-hidden="true" />
+            )}
+          </button>
+          <div class="export-tooltip" role="tooltip">
+            {dataExport.status === "error"
+              ? `Export failed: ${dataExport.error}`
+              : "Downloads a JSON file with your browsing-time history and settings. Your data stays on your device."}
           </div>
-        )}
-        {dataExport.status === "error" && (
-          <div class="export-status error" role="alert">
-            Export failed: {dataExport.error}
-          </div>
-        )}
-        <p class="data-hint">
-          Downloads a JSON file with your browsing-time history and settings.
-          Your data stays on your device.
-        </p>
+        </div>
       </section>
-
-      <div class="divider" />
 
       <section class="debug-section">
         <button class="debug-toggle" onClick={toggleDebug}>
